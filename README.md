@@ -11,8 +11,8 @@ sudo ./setup.py install
 
 Modules installed will be located under `/usr/loca/lib/python2.7/dist-packages/sagfsdriver`
 
-Supported
-=========
+Supported plugins
+=================
 
 Following plugins are supported currently:
 - iPlant Datastore (datastore)
