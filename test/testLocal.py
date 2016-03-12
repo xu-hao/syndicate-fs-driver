@@ -20,6 +20,7 @@
 Plugin-Test
 """
 
+import time
 import traceback
 import os
 import sys
@@ -100,6 +101,7 @@ def _initFS( driver_config, driver_secrets, scan_dataset=False ):
         print(str(e))
         traceback.print_exc()
         return False
+    return True
 
 def _shutdownFS():
     global fs
@@ -280,8 +282,12 @@ def main():
     setup_test(CONFIG["DATASET_DIR"])
 
     dinit = driver_init(CONFIG, SECRETS)
-    # do something
+    if not dinit:
+        print("cannot init driver")
+        sys.exit(1)
 
+    # do something
+    time.sleep(20)
 
     if dinit:
         driver_shutdown()

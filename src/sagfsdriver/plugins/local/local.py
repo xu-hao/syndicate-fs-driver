@@ -70,11 +70,6 @@ class plugin_impl(abstractfs.afsbase):
         self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
                                                    InotifyEventHandler())
 
-        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY
-        self.watch_directory = self.watch_manager.add_watch(dataset_root, 
-                                                            mask, 
-                                                            rec=True)
-
         # init dataset tracker
         self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
                                                         update_event_handler=self._on_dataset_update, 
@@ -105,6 +100,14 @@ class plugin_impl(abstractfs.afsbase):
         if not os.path.exists(dataset_root):
             raise IOError("dataset root does not exist")
 
+        # start monitoring
+        self.notifier.start()
+
+        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY
+        self.watch_directory = self.watch_manager.add_watch(dataset_root, 
+                                                            mask, 
+                                                            rec=True)
+
         if scan_dataset:
             # add initial dataset
             entries = os.listdir(dataset_root)
@@ -124,9 +127,6 @@ class plugin_impl(abstractfs.afsbase):
                                         modify_time=sb.st_mtime)
                 stats.append(st)
             self.dataset_tracker.updateDirectory(path=dataset_root, entries=stats)
-
-        # start monitoring
-        self.notifier.start()
 
     def close(self):
         if self.watch_manager and self.watch_directory:
