@@ -42,15 +42,32 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 class InotifyEventHandler(pyinotify.ProcessEvent):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
     def process_IN_CREATE(self, event):
         logger.info("Creating: %s" % event.pathname)
+        self.plugin.on_update_detected("create", event.pathname)
 
     def process_IN_DELETE(self, event):
         logger.info("Removing: %s" % event.pathname)
+        self.plugin.on_update_detected("remove", event.pathname)
 
     def process_IN_MODIFY(self, event):
         logger.info("Modifying: %s" % event.pathname)
+        self.plugin.on_update_detected("modify", event.pathname)
 
+    def process_IN_ATTRIB(self, event):
+        logger.info("Modifying attributes: %s" % event.pathname)
+        self.plugin.on_update_detected("modify", event.pathname)
+
+    def process_IN_MOVED_FROM(self, event):
+        logger.info("Moving a file from : %s" % event.pathname)
+        self.plugin.on_update_detected("create", event.pathname)
+
+    def process_IN_MOVED_TO(self, event):
+        logger.info("Moving a file to : %s" % event.pathname)
+        self.plugin.on_update_detected("remove", event.pathname)
 
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config):
@@ -67,32 +84,61 @@ class plugin_impl(abstractfs.afsbase):
 
         # set inotify
         self.watch_manager = pyinotify.WatchManager()
+        self.notify_handler = InotifyEventHandler(self)
         self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
-                                                   InotifyEventHandler())
+                                                   self.notify_handler)
 
         # init dataset tracker
         self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
-                                                        update_event_handler=self._on_dataset_update, 
-                                                        request_for_update_handler=self._on_request_update)
+                                                    update_event_handler=self._on_dataset_update, 
+                                                    request_for_update_handler=self._on_request_update)
 
         self.notification_cb = None
+
+    def on_update_detected(self, operation, path):
+        if operation in ["create", "remove", "modify"]:
+            if path:
+                parent_path = os.path.dirname(path)
+                entries = os.listdir(parent_path)
+                stats = []
+                for entry in entries:
+                    # entry is a filename
+                    entry_path = os.path.join(parent_path, entry)
+                    # get stat
+                    sb = os.stat(entry_path)
+
+                    st = abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
+                                            path=entry_path,
+                                            name=entry, 
+                                            size=sb.st_size,
+                                            checksum=0,
+                                            create_time=sb.st_ctime,
+                                            modify_time=sb.st_mtime)
+                    stats.append(st)
+                self.dataset_tracker.updateDirectory(path=parent_path, entries=stats)
 
     def _on_dataset_update(self, updated_entries, added_entries, removed_entries):
         if self.notification_cb:
             self.notification_cb(updated_entries, added_entries, removed_entries)
 
     def _on_request_update(self, entry):
-        entries = self.irods.listStats(entry.path)
+        entries = os.listdir(entry.path)
         stats = []
         for e in entries:
-            sb = abstractfs.afsstat(directory=e.directory, 
-                                    path=e.path,
-                                    name=e.name, 
-                                    size=e.size,
-                                    checksum=e.checksum,
-                                    create_time=e.create_time,
-                                    modify_time=e.modify_time)
-            stats.append(sb)
+                # entry is a filename
+                entry_path = os.path.join(entry.path, e)
+                # get stat
+                sb = os.stat(entry_path)
+
+                st = abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
+                                        path=entry_path,
+                                        name=e, 
+                                        size=sb.st_size,
+                                        checksum=0,
+                                        create_time=sb.st_ctime,
+                                        modify_time=sb.st_mtime)
+                stats.append(st)
+
         self.dataset_tracker.updateDirectory(path=entry.path, entries=stats)
 
     def connect(self, scan_dataset=True):
@@ -103,7 +149,7 @@ class plugin_impl(abstractfs.afsbase):
         # start monitoring
         self.notifier.start()
 
-        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY
+        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO
         self.watch_directory = self.watch_manager.add_watch(dataset_root, 
                                                             mask, 
                                                             rec=True)

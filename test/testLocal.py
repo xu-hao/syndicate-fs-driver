@@ -26,7 +26,7 @@ import os
 import sys
 import json
 
-# import packages under src/*
+# import packages under src/
 test_dirpath = os.path.dirname(os.path.abspath(__file__))
 driver_root = os.path.dirname(test_dirpath)
 src_root = os.path.join(driver_root, "src")
@@ -118,18 +118,21 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
         entry["flag"] = ENTRY_UPDATED
         entry["stat"] = u
         path_queue.append(entry)
+        print "Updated -", entry
 
     for a in added_entries:
         entry = {}
         entry["flag"] = ENTRY_ADDED
         entry["stat"] = a
         path_queue.append(entry)
+        print "Added -", entry
 
     for r in removed_entries:
         entry = {}
         entry["flag"] = ENTRY_REMOVED
         entry["stat"] = r
         path_queue.append(entry)
+        print "Removed -", entry
 
 def driver_init( driver_config, driver_secrets ):
     """
@@ -161,7 +164,7 @@ def driver_shutdown():
     _shutdownFS()
     
 
-def next_dataset( driver_config, driver_secrets ):
+def next_dataset():
     """
     Return the next dataset command for the AG to process.
     Should block until there's data.
@@ -208,72 +211,17 @@ def next_dataset( driver_config, driver_secrets ):
         else:
             # file 
             if flag == ENTRY_UPDATED or flag == ENTRY_ADDED:
-                print("> put file %d %s", stat.size, publish_path)
-                cmd = gateway.make_metadata_command( "put", "file", 0555, stat.size, publish_path )
+                print("> put file %d %s" % (stat.size, publish_path))
             elif flag == ENTRY_REMOVED:
-                print("> delete file %d %s", stat.size, publish_path)
+                print("> delete file %d %s" % (stat.size, publish_path))
 
-        if cmd is not None:
-            # have a command!
-            break
-
-        else:
-            # try next path 
-            continue
+        continue
 
     # have more data
     return True
 
-
-def read( request, chunk_fd, driver_config, driver_secrets ):
-    """
-    Read a chunk of data.
-    @request is a DriverRequest
-    @chunk_fd is a file descriptor to which to write the data.
-    @driver_config is a dict containing the driver's config
-    @driver_secrets is a dict containing the driver's unencrypted secrets
-    """
-
-    global fs
-    global dataset_dir
-
-    if not _initFS( driver_config, driver_secrets, False ):
-        print("Unable to init filesystem")
-        sys.exit(1) 
-
-    path = gateway.request_path( request )
-    file_path = gateway.path_join( dataset_dir, path )
-    byte_offset = gateway.request_byte_offset( request )
-    byte_len = gateway.request_byte_len( request )
-    buf = None
-
-    if byte_offset is None:
-        # this is a bug
-        print("BUG: byte offset of request on %s is not defined" % file_path )
-        sys.exit(1)
-
-    if byte_len is None:
-        # this is a bug
-        print("BUG: byte len of request on %s is not defined" % file_path )
-        sys.exit(1)
-
-    if not fs.exists( file_path ):
-        print("No such file or directory: %s" % file_path )
-        return -errno.ENOENT
-
-    try:
-        buf = fs.read( file_path, byte_offset, byte_len)
-    except Exception, e:
-        print("Failed to read %s: %s" % (file_path, e))
-        sys.exit(1)
-
-    # send it off
-    chunk_fd.write( buf )
-    return 0 
-
 def setup_test(dataset_path):
     pass
-
 
 def main():
     global CONFIG
@@ -286,8 +234,15 @@ def main():
         print("cannot init driver")
         sys.exit(1)
 
+    while next_dataset():
+        pass
+
+    print("waiting 20 secs")
     # do something
     time.sleep(20)
+
+    while next_dataset():
+        pass
 
     if dinit:
         driver_shutdown()
