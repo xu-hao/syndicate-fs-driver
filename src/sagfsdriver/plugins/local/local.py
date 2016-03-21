@@ -69,6 +69,9 @@ class InotifyEventHandler(pyinotify.ProcessEvent):
         logger.info("Moving a file to : %s" % event.pathname)
         self.plugin.on_update_detected("remove", event.pathname)
 
+    def process_default(self, event):
+        logger.info("Unhandled event to a file : %s" % event.pathname)
+
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config):
         if not config:
@@ -149,10 +152,11 @@ class plugin_impl(abstractfs.afsbase):
         # start monitoring
         self.notifier.start()
 
-        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO
+        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
         self.watch_directory = self.watch_manager.add_watch(dataset_root, 
                                                             mask, 
-                                                            rec=True)
+                                                            rec=True,
+                                                            auto_add=True)
 
         if scan_dataset:
             # add initial dataset

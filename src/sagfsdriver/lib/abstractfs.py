@@ -16,6 +16,8 @@
    limitations under the License.
 """
 
+import json
+
 from abc import ABCMeta, abstractmethod
 
 """
@@ -47,6 +49,14 @@ class afsstat(object):
 
         return "<afsstat %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum) 
 
+    def toJson(self):
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def fromJson(cls, json_str):
+        json_dict = json.loads(json_str)
+        return cls(**json_dict)
+        
 
 class afsbase(object):
     __metaclass__ = ABCMeta

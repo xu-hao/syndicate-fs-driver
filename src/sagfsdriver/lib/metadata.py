@@ -20,36 +20,23 @@ import os
 import sys
 import time
 import threading
+import sqlite3
+
+import sagfsdriver.lib.abstractfs as abstractfs
+
 
 def get_current_time():
     return int(round(time.time() * 1000))
 
 """
-Directory structure
+Database
 """
-class dirmeta(object):
-    def __init__(self, path=None,
-                       entries=[],
-                       last_visit_time=0,
-                       handler=None):
-        self.path = path
-        self.entries = {}
-        for entry in entries:
-            self.entries[entry.name] = entry
-
-        if last_visit_time:
-            self.last_visit_time = last_visit_time
-        else:
-            self.last_visit_time = get_current_time()
+class dbmanager(object):
+    def __init__(self, dbpath="datasetmeta.db"):
+        self.db_path = dbpath;
+        self.db_conn = sqlite3.connect(dbpath, check_same_thread=False)
         self.lock = threading.RLock()
-        self.handler = handler
-
-    def __enter__(self):
-        self._lock()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._unlock()
+        self.createTable()
 
     def _lock(self):
         self.lock.acquire()
@@ -57,89 +44,63 @@ class dirmeta(object):
     def _unlock(self):
         self.lock.release()
 
-    def getEntry(self, name):
-        with self.lock:
-            entry = self.entries.get(name)
-        return entry 
+    def createTable(self):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        # create a table if not exist
+        db_cursor.execute("CREATE TABLE IF NOT EXISTS tbl_dataset( \
+                                                         path VARCHAR NOT NULL, \
+                                                         filename VARCHAR NOT NULL, \
+                                                         status VARCHAR NOT NULL, \
+                                                         registered_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
+                                                         PRIMARY KEY (path, filename) \
+                                                         );")
+        self.db_conn.commit()
+        self._unlock()
 
-    def getEntries(self):
-        with self.lock:
-            entry = self.entries.values()
-        return entry
+    def dropTable(self):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        db_cursor.execute("DROP TABLE tbl_dataset")
+        self.db_conn.commit()
+        self._unlock()
 
-    def updateFully(self, entries=[], last_visit_time=0):
-        with self.lock:
-            # find removed/added/updated entries
-            new_entries = {}
-            for entry in entries:
-                new_entries[entry.name] = entry
-                
-            set_prev = set(self.entries.keys())
-            set_new = set(new_entries.keys())
+    def insertEntry(self, path, filename, status):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        db_cursor.execute("INSERT INTO tbl_dataset(path, filename, status) values (?, ?, ?)", (path, filename, status.toJson(),))
+        self.db_conn.commit()
+        self._unlock()
 
-            set_intersection = set_prev & set_new
+    def updateEntry(self, path, filename, status):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        db_cursor.execute("UPDATE tbl_dataset SET status=?, registered_time=CURRENT_TIMESTAMP WHERE path=? AND filename=?", (status.toJson(), path, filename,))
+        self.db_conn.commit()
+        self._unlock()
 
-            unchanged_entries = []
-            updated_entries = []
-            removed_entries = []
-            added_entries = []
+    def deleteEntry(self, path, filename):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        db_cursor.execute("DELETE FROM tbl_dataset WHERE path=? AND filename=?", (path, filename,))
+        self.db_conn.commit()
+        self._unlock()
 
-            # check update and unchanged
-            for key in set_intersection:
-                e_old = self.entries[key]
-                e_new = new_entries[key]
-                if e_old == e_new:
-                    # unchanged
-                    unchanged_entries.append(e_old)
-                else:
-                    # changed
-                    updated_entries.append(e_new)
+    def getDirectoryEntries(self, path):
+        self._lock()
+        db_cursor = self.db_conn.cursor()
+        entries = []
+        for row_path, row_filename, row_status, row_registered_time in db_cursor.execute("SELECT * FROM tbl_dataset WHERE path=? ORDER BY filename", (path,)):
+            entry = {}
+            entry["path"] = row_path
+            entry["filename"] = row_filename
+            entry["status"] = abstractfs.afsstat.fromJson(row_status)
+            entry["registered_time"] = row_registered_time
+            entries.append(entry)
 
-            # check removed
-            for key in set_prev:
-                if key not in set_intersection:
-                    # removed
-                    e_old = self.entries[key]
-                    removed_entries.append(e_old)
-
-            # check added
-            for key in set_new:
-                if key not in set_intersection:
-                    # added
-                    e_new = new_entries[key]
-                    added_entries.append(e_new)
-
-            # apply to existing dictionary
-            for entry in removed_entries:
-                del self.entries[entry.name]
-
-            for entry in updated_entries:
-                self.entries[entry.name] = entry
-
-            for entry in added_entries:
-                self.entries[entry.name] = entry
-
-            if last_visit_time:
-                self.last_visit_time = last_visit_time
-            else:
-                self.last_visit_time = get_current_time()
-
-        if self.handler:
-            self.handler(updated_entries, added_entries, removed_entries)
-
-    def removeAllEntries(self):
-        with self.lock:
-            removed_entries = self.entries.values()
-            self.entries.clear()
-
-        if self.handler:
-            self.handler([], [], removed_entries)
-
-    def __repr__(self): 
-        return "<dirmeta %s %d>" % (self.path, self.last_visit_time) 
-
-    def __eq__(self, other): 
-        return self.__dict__ == other.__dict__
+        self._unlock()
+        return entries
+        
 
 """
 Interface class to datasetmeta
@@ -148,7 +109,7 @@ class datasetmeta(object):
     def __init__(self, root_path="/", 
                        update_event_handler=None, request_for_update_handler=None):
         self.root_path = root_path
-        self.directories = {}
+        self.dbmanager = dbmanager()
         self.lock = threading.RLock()
         self.update_event_handler = update_event_handler
         self.request_for_update_handler = request_for_update_handler
@@ -174,22 +135,14 @@ class datasetmeta(object):
             self.request_for_update_handler(directory)
 
     def _onDirectoryUpdate(self, updated_entries, added_entries, removed_entries):
-        # if directory is updated
-        if removed_entries:
-            for removed_entry in removed_entries:
-                if removed_entry.directory:
-                    with self.lock:
-                        e_directory = self.directories.get(removed_entry.path)
-                        if e_directory:
-                            e_directory.removeAllEntries()
-
-        if (updated_entries and len(updated_entries) > 0) or \
-           (added_entries and len(added_entries) > 0) or \
-           (removed_entries and len(removed_entries) > 0):
+        if (len(updated_entries) > 0) or \
+           (len(added_entries) > 0) or \
+           (len(removed_entries) > 0):
             # if any of these are not empty
             if self.update_event_handler:
                 self.update_event_handler(updated_entries, added_entries, removed_entries)
 
+        # for subdirectories
         if added_entries:
             for added_entry in added_entries:
                 if added_entry.directory:
@@ -202,43 +155,93 @@ class datasetmeta(object):
 
     def updateDirectory(self, path=None, entries=[]):
         with self.lock:
-            e_directory = self.directories.get(path)
-            if e_directory:
-                e_directory.updateFully(entries)
-            else:
-                self.directories[path] = dirmeta(path=path, entries=entries, handler=self._onDirectoryUpdate)
-                self._onDirectoryUpdate([], entries, [])
+            # find removed/added/updated entries
+            old_entries = {}
+            for entry in self.dbmanager.getDirectoryEntries(path):
+                old_entries[entry["filename"]] = entry["status"]
+
+            new_entries = {}
+            for entry in entries:
+                new_entries[entry.name] = entry
+                
+            set_prev = set(old_entries.keys())
+            set_new = set(new_entries.keys())
+
+            set_intersection = set_prev & set_new
+
+            unchanged_entries = []
+            updated_entries = []
+            removed_entries = []
+            added_entries = []
+
+            # check update and unchanged
+            for key in set_intersection:
+                e_old = old_entries[key]
+                e_new = new_entries[key]
+                if e_old == e_new:
+                    # unchanged
+                    unchanged_entries.append(e_old)
+                else:
+                    # changed
+                    updated_entries.append(e_new)
+
+            # check removed
+            for key in set_prev:
+                if key not in set_intersection:
+                    # removed
+                    e_old = old_entries[key]
+                    removed_entries.append(e_old)
+
+            # check added
+            for key in set_new:
+                if key not in set_intersection:
+                    # added
+                    e_new = new_entries[key]
+                    added_entries.append(e_new)
+
+            # if directory is removed
+            for removed_entry in removed_entries:
+                if removed_entry.directory:
+                    removed_subdir = self._getStatsRecursive(removed_entry.path)
+                    for removed_subdir_entry in removed_subdir:
+                        removed_entries.append(removed_subdir_entry)
+
+            # apply to dataset
+            for entry in removed_entries:
+                self.dbmanager.deleteEntry(os.path.dirname(entry.path), entry.name)
+
+            for entry in updated_entries:
+                self.dbmanager.updateEntry(os.path.dirname(entry.path), entry.name, entry)
+
+            for entry in added_entries:
+                self.dbmanager.insertEntry(os.path.dirname(entry.path), entry.name, entry)
+
+            self._onDirectoryUpdate(updated_entries, added_entries, removed_entries)
 
     def getDirectory(self, path):
+        entries = None
         with self.lock:
-            directory = self.directories.get(path)
-            return directory
-
-    def _walk(self, directory):
-        entries = []
-        print directory
-        if directory:
-            directory._lock()
-            dirs = []
-            for entry in directory.getEntries():
-                if entry.directory:
-                    dirs.append(entry.path)
-                entries.append(entry.path)
-
-            for path in dirs:
-                sub_dir = self.directories.get(path)
-                if sub_dir:
-                    for sub_entry in self._walk(sub_dir):
-                        entries.append(sub_entry)
-            directory._unlock()
+            entries = self.dbmanager.getDirectoryEntries(path)
         return entries
+
+    def _getStatsRecursive(self, path):
+        entries = []
+        for entry in self.dbmanager.getDirectoryEntries(path):
+            dirs = []
+            stat = entry["status"]
+            entries.append(stat)
+            if stat.directory:
+                dirs.append(stat.path)
+
+            for dirpath in dirs:
+                for sub_entry in self._getStatsRecursive(dirpath):
+                    entries.append(sub_entry)
+        return entries        
 
     def walk(self):
         entries = []
         with self.lock:
-            root_dir = self.directories.get(self.root_path)
-            if root_dir:
-                for entry in self._walk(root_dir):
-                    entries.append(entry)
+            for entry in self._getStatsRecursive(self.root_path):
+                entries.append(entry)
         return entries
 
