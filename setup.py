@@ -16,8 +16,7 @@
    limitations under the License.
 """
 
-from distutils.core import setup
-from distutils.extension import Extension
+from setuptools import setup
 
 import os
 import sys
@@ -33,6 +32,13 @@ for plugin in plugins:
     if os.path.isdir(os.path.join('src/sagfsdriver/plugins', plugin)):
         packages.append('sagfsdriver.plugins.' + plugin)
 
+# dependencies
+dependencies = ['pika',
+                'python-irodsclient',
+                'retrying',
+                'timeout_decorator',
+                'pyinotify']
+
 setup(name='sagfsdriver',
       version='0.1',
       description='Syndicate AG Filesystem Driver',
@@ -43,4 +49,6 @@ setup(name='sagfsdriver',
       packages = packages,
       package_dir = {
                   'sagfsdriver': 'src/sagfsdriver'
-      })
+      },
+      install_requires = dependencies,
+      zip_safe=False)
