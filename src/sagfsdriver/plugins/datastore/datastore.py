@@ -17,17 +17,29 @@
 """
 
 """
-iPlant Data Store Backend
+iPlant Data Store Plugin
 """
 
 import os
 import time
-import syndicate.ag.fs_driver_common.abstract_fs as abstract_fs
-import syndicate.ag.fs_driver_common.metadata as metadata
-import syndicate.ag.fs_driver_common.fs_backends.iplant_datastore.bms_client as bms_client
-import syndicate.ag.fs_driver_common.fs_backends.iplant_datastore.irods_client as irods_client
+import logging
+import sagfsdriver.lib.abstractfs as abstractfs
+import sagfsdriver.lib.metadata as metadata
+import sagfsdriver.plugins.datastore.bms_client as bms_client
+import sagfsdriver.plugins.datastore.irods_client as irods_client
 
-class plugin_impl(abstract_fs.fs_base):
+logger = logging.getLogger('syndicate_datastore_filesystem')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('syndicate_datastore_filesystem.log')
+fh.setLevel(logging.DEBUG)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(fh)
+
+class plugin_impl(abstractfs.afsbase):
     def __init__(self, config):
         if not config:
             raise ValueError("fs configuration is not given correctly")
@@ -93,9 +105,9 @@ class plugin_impl(abstract_fs.fs_base):
         self.bms.setCallbacks(on_message_callback=self._on_bms_message_receive)
 
         # init dataset tracker
-        self.dataset_tracker = metadata.dataset_tracker(root_path=dataset_root,
-                                                        update_event_handler=self._on_dataset_update, 
-                                                        request_for_update_handler=self._on_request_update)
+        self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
+                                                    update_event_handler=self._on_dataset_update, 
+                                                    request_for_update_handler=self._on_request_update)
 
         self.notification_cb = None
 
@@ -114,13 +126,13 @@ class plugin_impl(abstract_fs.fs_base):
                     entries = self.irods.listStats(parent_path)
                     stats = []
                     for e in entries:
-                        stat = abstract_fs.fs_stat(directory=e.directory, 
-                                                   path=e.path,
-                                                   name=e.name, 
-                                                   size=e.size,
-                                                   checksum=e.checksum,
-                                                   create_time=e.create_time,
-                                                   modify_time=e.modify_time)
+                        stat = abstractfs.afsstat(directory=e.directory, 
+                                                  path=e.path,
+                                                  name=e.name, 
+                                                  size=e.size,
+                                                  checksum=e.checksum,
+                                                  create_time=e.create_time,
+                                                  modify_time=e.modify_time)
                         stats.append(stat)
                     self.dataset_tracker.updateDirectory(path=parent_path, entries=stats)
 
@@ -132,13 +144,13 @@ class plugin_impl(abstract_fs.fs_base):
                     entries = self.irods.listStats(old_parent_path)
                     stats = []
                     for e in entries:
-                        stat = abstract_fs.fs_stat(directory=e.directory, 
-                                                   path=e.path,
-                                                   name=e.name, 
-                                                   size=e.size,
-                                                   checksum=e.checksum,
-                                                   create_time=e.create_time,
-                                                   modify_time=e.modify_time)
+                        stat = abstractfs.afsstat(directory=e.directory, 
+                                                  path=e.path,
+                                                  name=e.name, 
+                                                  size=e.size,
+                                                  checksum=e.checksum,
+                                                  create_time=e.create_time,
+                                                  modify_time=e.modify_time)
                         stats.append(stat)
                     self.dataset_tracker.updateDirectory(path=old_parent_path, entries=stats)
 
@@ -149,13 +161,13 @@ class plugin_impl(abstract_fs.fs_base):
                         entries = self.irods.listStats(new_parent_path)
                         stats = []
                         for e in entries:
-                            stat = abstract_fs.fs_stat(directory=e.directory, 
-                                                       path=e.path,
-                                                       name=e.name, 
-                                                       size=e.size,
-                                                       checksum=e.checksum,
-                                                       create_time=e.create_time,
-                                                       modify_time=e.modify_time)
+                            stat = abstractfs.afsstat(directory=e.directory, 
+                                                      path=e.path,
+                                                      name=e.name, 
+                                                      size=e.size,
+                                                      checksum=e.checksum,
+                                                      create_time=e.create_time,
+                                                      modify_time=e.modify_time)
                             stats.append(stat)
                         self.dataset_tracker.updateDirectory(path=new_parent_path, entries=stats)
 
@@ -167,13 +179,13 @@ class plugin_impl(abstract_fs.fs_base):
         entries = self.irods.listStats(entry.path)
         stats = []
         for e in entries:
-            stat = abstract_fs.fs_stat(directory=e.directory, 
-                                       path=e.path,
-                                       name=e.name, 
-                                       size=e.size,
-                                       checksum=e.checksum,
-                                       create_time=e.create_time,
-                                       modify_time=e.modify_time)
+            stat = abstractfs.afsstat(directory=e.directory, 
+                                      path=e.path,
+                                      name=e.name, 
+                                      size=e.size,
+                                      checksum=e.checksum,
+                                      create_time=e.create_time,
+                                      modify_time=e.modify_time)
             stats.append(stat)
         self.dataset_tracker.updateDirectory(path=entry.path, entries=stats)
 
@@ -187,7 +199,7 @@ class plugin_impl(abstract_fs.fs_base):
             entries = self.irods.listStats(dataset_root)
             stats = []
             for entry in entries:
-                stat = abstract_fs.fs_stat(directory=entry.directory, 
+                stat = abstractfs.afsstat(directory=entry.directory, 
                                            path=entry.path,
                                            name=entry.name, 
                                            size=entry.size,
@@ -217,7 +229,7 @@ class plugin_impl(abstract_fs.fs_base):
         ascii_path = filepath.encode('ascii','ignore')
         return self.irods.read(ascii_path, offset, size)
 
-    def backend(self):
+    def plugin(self):
         return self.__class__
 
     def set_notification_cb(self, notification_cb):
