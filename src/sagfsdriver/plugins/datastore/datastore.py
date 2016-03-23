@@ -200,12 +200,12 @@ class plugin_impl(abstractfs.afsbase):
             stats = []
             for entry in entries:
                 stat = abstractfs.afsstat(directory=entry.directory, 
-                                           path=entry.path,
-                                           name=entry.name, 
-                                           size=entry.size,
-                                           checksum=entry.checksum,
-                                           create_time=entry.create_time,
-                                           modify_time=entry.modify_time)
+                                          path=entry.path,
+                                          name=entry.name, 
+                                          size=entry.size,
+                                          checksum=entry.checksum,
+                                          create_time=entry.create_time,
+                                          modify_time=entry.modify_time)
                 stats.append(stat)
             self.dataset_tracker.updateDirectory(path=dataset_root, entries=stats)
 

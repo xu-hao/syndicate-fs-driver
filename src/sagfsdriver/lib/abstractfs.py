@@ -19,6 +19,7 @@
 import json
 
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 
 """
 Abstraction of filesystem insterface
@@ -36,8 +37,15 @@ class afsstat(object):
         self.name = name
         self.size = size
         self.checksum = checksum
-        self.create_time = create_time
-        self.modify_time = modify_time
+        if isinstance(create_time, datetime):
+            self.create_time = time.mktime(create_time.timetuple())
+        else:
+            self.create_time = create_time
+
+        if isinstance(modify_time, datetime):
+            self.create_time = time.mktime(create_time.timetuple())
+        else:
+            self.modify_time = modify_time
 
     def __eq__(self, other): 
         return self.__dict__ == other.__dict__
