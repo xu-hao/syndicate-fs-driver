@@ -122,12 +122,16 @@ class plugin_impl(abstractfs.afsbase):
         if not message or len(message) <= 0:
             return
 
+        dataset_root = self.dataset_tracker.getRootPath()
+
         msg = json.loads(message)
         operation = msg.get("operation")
         if operation:
+            operation = operation.encode('ascii','ignore')
             if operation in ["collection.add", "collection.rm", "data-object.add", "data-object.rm", "data-object.mod"]:
                 path = msg.get("path")
                 if path:
+                    path = path.encode('ascii','ignore')
                     parent_path = os.path.dirname(path)
                     entries = self.irods.listStats(parent_path)
                     stats = []
@@ -146,25 +150,10 @@ class plugin_impl(abstractfs.afsbase):
                 old_path = msg.get("old-path")
                 old_parent_path = None
                 if old_path:
-                    old_parent_path = os.path.dirname(old_path)
-                    entries = self.irods.listStats(old_parent_path)
-                    stats = []
-                    for e in entries:
-                        stat = abstractfs.afsstat(directory=e.directory, 
-                                                  path=e.path,
-                                                  name=e.name, 
-                                                  size=e.size,
-                                                  checksum=e.checksum,
-                                                  create_time=e.create_time,
-                                                  modify_time=e.modify_time)
-                        stats.append(stat)
-                    self.dataset_tracker.updateDirectory(path=old_parent_path, entries=stats)
-
-                new_path = msg.get("new-path")
-                if new_path:
-                    new_parent_path = os.path.dirname(new_path)
-                    if new_parent_path != old_parent_path:
-                        entries = self.irods.listStats(new_parent_path)
+                    old_path = old_path.encode('ascii','ignore')
+                    if old_path.startswith(dataset_root):
+                        old_parent_path = os.path.dirname(old_path)
+                        entries = self.irods.listStats(old_parent_path)
                         stats = []
                         for e in entries:
                             stat = abstractfs.afsstat(directory=e.directory, 
@@ -175,7 +164,26 @@ class plugin_impl(abstractfs.afsbase):
                                                       create_time=e.create_time,
                                                       modify_time=e.modify_time)
                             stats.append(stat)
-                        self.dataset_tracker.updateDirectory(path=new_parent_path, entries=stats)
+                        self.dataset_tracker.updateDirectory(path=old_parent_path, entries=stats)
+
+                new_path = msg.get("new-path")
+                if new_path:
+                    new_path = new_path.encode('ascii','ignore')
+                    if new_path.startswith(dataset_root):
+                        new_parent_path = os.path.dirname(new_path)
+                        if new_parent_path != old_parent_path:
+                            entries = self.irods.listStats(new_parent_path)
+                            stats = []
+                            for e in entries:
+                                stat = abstractfs.afsstat(directory=e.directory, 
+                                                          path=e.path,
+                                                          name=e.name, 
+                                                          size=e.size,
+                                                          checksum=e.checksum,
+                                                          create_time=e.create_time,
+                                                          modify_time=e.modify_time)
+                                stats.append(stat)
+                            self.dataset_tracker.updateDirectory(path=new_parent_path, entries=stats)
 
     def _on_dataset_update(self, updated_entries, added_entries, removed_entries):
         if self.notification_cb:
