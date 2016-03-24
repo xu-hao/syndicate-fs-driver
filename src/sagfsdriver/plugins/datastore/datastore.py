@@ -128,8 +128,26 @@ class plugin_impl(abstractfs.afsbase):
         operation = msg.get("operation")
         if operation:
             operation = operation.encode('ascii','ignore')
-            if operation in ["collection.add", "collection.rm", "data-object.add", "data-object.rm", "data-object.mod"]:
+            if operation in ["collection.add", "collection.rm", "data-object.add", "data-object.rm"]:
                 path = msg.get("path")
+                if path:
+                    path = path.encode('ascii','ignore')
+                    parent_path = os.path.dirname(path)
+                    entries = self.irods.listStats(parent_path)
+                    stats = []
+                    for e in entries:
+                        stat = abstractfs.afsstat(directory=e.directory, 
+                                                  path=e.path,
+                                                  name=e.name, 
+                                                  size=e.size,
+                                                  checksum=e.checksum,
+                                                  create_time=e.create_time,
+                                                  modify_time=e.modify_time)
+                        stats.append(stat)
+                    self.dataset_tracker.updateDirectory(path=parent_path, entries=stats)
+
+            elif operation in ["data-object.mod"]:
+                path = msg.get("entity_path")
                 if path:
                     path = path.encode('ascii','ignore')
                     parent_path = os.path.dirname(path)
