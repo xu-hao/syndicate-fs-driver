@@ -73,13 +73,16 @@ class InotifyEventHandler(pyinotify.ProcessEvent):
         logger.info("Unhandled event to a file : %s" % event.pathname)
 
 class plugin_impl(abstractfs.afsbase):
-    def __init__(self, config):
+    def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
         if not config:
             raise ValueError("fs configuration is not given correctly")
 
         dataset_root = config.get("dataset_root")
         if not dataset_root:
             raise ValueError("dataset_root configuration is not given correctly")
+
+        # set role
+        self.role = role
 
         # config can have unicode strings
         dataset_root = dataset_root.encode('ascii','ignore')
@@ -214,6 +217,9 @@ class plugin_impl(abstractfs.afsbase):
 
     def plugin(self):
         return self.__class__
+
+    def role(self):
+        return self.role
 
     def set_notification_cb(self, notification_cb):
         self.notification_cb = notification_cb

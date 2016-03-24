@@ -19,6 +19,8 @@
 import os
 import imp
 
+import sagfsdriver.lib.abstractfs as abstractfs
+
 """
 Exceptions
 """
@@ -53,11 +55,11 @@ class pluginloader(object):
         else:
             return None
 
-    def load(self, plugin_name=None, plugin_config=None):
+    def load(self, plugin_name=None, plugin_config=None, role=abstractfs.afsrole.DISCOVER):
         if plugin_name:
             plugin = self.findModule(plugin_name)
             if plugin:
-                return plugin.plugin_impl(plugin_config)
+                return plugin.plugin_impl(plugin_config, role)
             else:
                 raise PluginNotExist("unable to find a plugin for %s" % plugin_name)
         else:

@@ -65,14 +65,17 @@ class afsstat(object):
     def fromJson(cls, json_str):
         json_dict = json.loads(json_str)
         return cls(**json_dict)
-        
+
+class afsrole:
+    DISCOVER = 1
+    READ = 2
 
 class afsbase(object):
     __metaclass__ = ABCMeta
 
     # connect to remote system if necessary
     @abstractmethod
-    def connect(self, scan_dataset=True):
+    def connect(self):
         pass
 
     # disconnect and finalize
@@ -110,6 +113,11 @@ class afsbase(object):
     # return a class of plugin
     @abstractmethod
     def plugin(self):
+        pass
+    
+    # return a role of plugin
+    @abstractmethod
+    def role(self):
         pass
 
     @abstractmethod

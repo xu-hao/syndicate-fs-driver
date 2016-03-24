@@ -41,7 +41,7 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 class plugin_impl(abstractfs.afsbase):
-    def __init__(self, config):
+    def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
         if not config:
             raise ValueError("fs configuration is not given correctly")
 
@@ -74,6 +74,9 @@ class plugin_impl(abstractfs.afsbase):
         bms_config = config.get("bms")
         if not bms_config:
             raise ValueError("bms configuration is not given correctly")
+
+        # set role
+        self.role = role
 
         self.irods_config = irods_config
         self.bms_config = bms_config
@@ -232,6 +235,9 @@ class plugin_impl(abstractfs.afsbase):
 
     def plugin(self):
         return self.__class__
+
+    def role(self):
+        return self.role
 
     def set_notification_cb(self, notification_cb):
         self.notification_cb = notification_cb
