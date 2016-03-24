@@ -44,7 +44,7 @@ class afsstat(object):
             self.create_time = create_time
 
         if isinstance(modify_time, datetime):
-            self.create_time = time.mktime(create_time.timetuple())
+            self.modify_time = time.mktime(create_time.timetuple())
         else:
             self.modify_time = modify_time
 
