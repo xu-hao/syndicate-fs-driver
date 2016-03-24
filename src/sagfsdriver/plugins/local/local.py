@@ -88,16 +88,17 @@ class plugin_impl(abstractfs.afsbase):
         dataset_root = dataset_root.encode('ascii','ignore')
         dataset_root = dataset_root.rstrip("/")
 
-        # set inotify
-        self.watch_manager = pyinotify.WatchManager()
-        self.notify_handler = InotifyEventHandler(self)
-        self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
-                                                   self.notify_handler)
+        if self.role == abstractfs.afsrole.DISCOVER:
+            # set inotify
+            self.watch_manager = pyinotify.WatchManager()
+            self.notify_handler = InotifyEventHandler(self)
+            self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
+                                                       self.notify_handler)
 
-        # init dataset tracker
-        self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
-                                                    update_event_handler=self._on_dataset_update, 
-                                                    request_for_update_handler=self._on_request_update)
+            # init dataset tracker
+            self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
+                                                        update_event_handler=self._on_dataset_update, 
+                                                        request_for_update_handler=self._on_request_update)
 
         self.notification_cb = None
 
@@ -147,21 +148,21 @@ class plugin_impl(abstractfs.afsbase):
 
         self.dataset_tracker.updateDirectory(path=entry.path, entries=stats)
 
-    def connect(self, scan_dataset=True):
-        dataset_root = self.dataset_tracker.getRootPath()
-        if not os.path.exists(dataset_root):
-            raise IOError("dataset root does not exist")
+    def connect(self):
+        if self.role == abstractfs.afsrole.DISCOVER:
+            dataset_root = self.dataset_tracker.getRootPath()
+            if not os.path.exists(dataset_root):
+                raise IOError("dataset root does not exist")
 
-        # start monitoring
-        self.notifier.start()
+            # start monitoring
+            self.notifier.start()
 
-        mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
-        self.watch_directory = self.watch_manager.add_watch(dataset_root, 
-                                                            mask, 
-                                                            rec=True,
-                                                            auto_add=True)
+            mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
+            self.watch_directory = self.watch_manager.add_watch(dataset_root, 
+                                                                mask, 
+                                                                rec=True,
+                                                                auto_add=True)
 
-        if scan_dataset:
             # add initial dataset
             entries = os.listdir(dataset_root)
             stats = []
@@ -182,11 +183,12 @@ class plugin_impl(abstractfs.afsbase):
             self.dataset_tracker.updateDirectory(path=dataset_root, entries=stats)
 
     def close(self):
-        if self.watch_manager and self.watch_directory:
-            self.watch_manager.rm_watch(self.watch_directory.values())
+        if self.role == abstractfs.afsrole.DISCOVER:
+            if self.watch_manager and self.watch_directory:
+                self.watch_manager.rm_watch(self.watch_directory.values())
 
-        if self.notifier:
-            self.notifier.stop()
+            if self.notifier:
+                self.notifier.stop()
 
     def exists(self, path):
         ascii_path = path.encode('ascii','ignore')

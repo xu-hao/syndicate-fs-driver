@@ -93,25 +93,27 @@ class plugin_impl(abstractfs.afsbase):
                                                user=user, 
                                                password=password, 
                                                zone=irods_zone)
-        # init bms client
-        path_filter = dataset_root.rstrip("/") + "/*"
 
-        acceptor = bms_client.bms_message_acceptor("path", 
-                                                   path_filter)
-        self.bms = bms_client.bms_client(host=self.bms_config["host"], 
-                                         port=self.bms_config["port"], 
-                                         user=user, 
-                                         password=password, 
-                                         vhost=self.bms_config["vhost"],
-                                         acceptors=[acceptor])
+        if self.role == abstractfs.afsrole.DISCOVER:
+            # init bms client
+            path_filter = dataset_root.rstrip("/") + "/*"
+
+            acceptor = bms_client.bms_message_acceptor("path", 
+                                                       path_filter)
+            self.bms = bms_client.bms_client(host=self.bms_config["host"], 
+                                             port=self.bms_config["port"], 
+                                             user=user, 
+                                             password=password, 
+                                             vhost=self.bms_config["vhost"],
+                                             acceptors=[acceptor])
 
 
-        self.bms.setCallbacks(on_message_callback=self._on_bms_message_receive)
+            self.bms.setCallbacks(on_message_callback=self._on_bms_message_receive)
 
-        # init dataset tracker
-        self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
-                                                    update_event_handler=self._on_dataset_update, 
-                                                    request_for_update_handler=self._on_request_update)
+            # init dataset tracker
+            self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
+                                                        update_event_handler=self._on_dataset_update, 
+                                                        request_for_update_handler=self._on_request_update)
 
         self.notification_cb = None
 
@@ -193,11 +195,12 @@ class plugin_impl(abstractfs.afsbase):
             stats.append(stat)
         self.dataset_tracker.updateDirectory(path=entry.path, entries=stats)
 
-    def connect(self, scan_dataset=True):
+    def connect(self):
         self.irods.connect()
-        self.bms.connect()
 
-        if scan_dataset:
+        if self.role == abstractfs.afsrole.DISCOVER:
+            self.bms.connect()
+
             # add initial dataset
             dataset_root = self.dataset_tracker.getRootPath()
             entries = self.irods.listStats(dataset_root)
@@ -214,7 +217,9 @@ class plugin_impl(abstractfs.afsbase):
             self.dataset_tracker.updateDirectory(path=dataset_root, entries=stats)
 
     def close(self):
-        self.bms.close()
+        if self.role == abstractfs.afsrole.DISCOVER:
+            self.bms.close()
+
         self.irods.close()
 
     def exists(self, path):
