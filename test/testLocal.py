@@ -22,6 +22,7 @@ Plugin-Test
 
 import time
 import traceback
+import threading
 import os
 import sys
 import json
@@ -32,11 +33,14 @@ driver_root = os.path.dirname(test_dirpath)
 src_root = os.path.join(driver_root, "src")
 sys.path.append(src_root)
 
+import sagfsdriver.lib.abstractfs as abstractfs
 from sagfsdriver.lib.pluginloader import pluginloader
+
 
 dataset_dir = None
 path_queue = []
 fs = None
+lock = None
 
 ENTRY_UPDATED = 0
 ENTRY_ADDED = 1
@@ -52,7 +56,7 @@ CONFIG = {
 
 SECRETS = {}
 
-def _initFS( driver_config, driver_secrets, scan_dataset=False ):
+def _initFS( driver_config, driver_secrets, role ):
     global fs
     global dataset_dir
 
@@ -88,14 +92,14 @@ def _initFS( driver_config, driver_secrets, scan_dataset=False ):
 
     try:
         loader = pluginloader()
-        fs = loader.load(plugin, plugin_config)
+        fs = loader.load(plugin, plugin_config, role)
 
         if not fs:
             print("No such driver plugin found: %s" % plugin )
             return False
 
         fs.set_notification_cb(datasets_update_cb)
-        fs.connect(scan_dataset)
+        fs.connect()
     except Exception as e:
         print("Unable to initialize a driver")
         print(str(e))
@@ -113,6 +117,10 @@ def _shutdownFS():
     fs = None
 
 def datasets_update_cb(updated_entries, added_entries, removed_entries):
+    global path_queue
+    global lock
+
+    _lock()
     for u in updated_entries:
         entry = {}
         entry["flag"] = ENTRY_UPDATED
@@ -133,6 +141,15 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
         entry["stat"] = r
         path_queue.append(entry)
         print "Removed -", entry
+    _unlock()
+
+def _lock():
+    global lock
+    lock.acquire()
+
+def _unlock():
+    global lock
+    lock.release()
 
 def driver_init( driver_config, driver_secrets ):
     """
@@ -141,8 +158,18 @@ def driver_init( driver_config, driver_secrets ):
 
     global fs
     global dataset_dir
+    global lock
 
-    if not _initFS( driver_config, driver_secrets, True ):
+    lock = threading.RLock()
+
+    role = abstractfs.afsrole.DISCOVER
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "read":
+            role = abstractfs.afsrole.READ
+        elif sys.argv[1] == "crawl":
+            role = abstractfs.afsrole.DISCOVER
+
+    if not _initFS( driver_config, driver_secrets, role ):
         print("Unable to init filesystem")
         return False
 
@@ -180,16 +207,18 @@ def next_dataset():
 
     # find the next file or directory 
     while True:
-
         next_stat = None
+        _lock()
         if len(path_queue) > 0:
             next_stat = path_queue[0]
             path_queue.pop(0)
+        _unlock()
 
         if next_stat is None:
             # no more data
             # stop calling this method
-            return False
+            time.sleep(1)
+            continue;
 
         flag = next_stat["flag"]
         stat = next_stat["stat"]
@@ -218,7 +247,7 @@ def next_dataset():
         continue
 
     # have more data
-    return True
+    return False
 
 def setup_test(dataset_path):
     pass
