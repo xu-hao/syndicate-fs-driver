@@ -16,12 +16,11 @@
    limitations under the License.
 """
 
+import traceback
 import os
 import irods
 import logging
 
-from os import O_RDONLY
-from io import RawIOBase, BufferedRandom
 from irods.session import iRODSSession
 from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
 from retrying import retry
@@ -110,6 +109,7 @@ class irods_client(object):
                        user=None,
                        password=None,
                        zone=None):
+        logger.info("__init__")
         self.host = host
         self.port = port
         self.user = user
@@ -118,6 +118,7 @@ class irods_client(object):
         self.session = None
 
     def connect(self):
+        logger.info("connect")
         self.session = iRODSSession(host=self.host, 
                                     port=self.port, 
                                     user=self.user, 
@@ -125,6 +126,7 @@ class irods_client(object):
                                     zone=self.zone)
 
     def close(self):
+        logger.info("close")
         self.session.cleanup()
 
     def __enter__(self):
@@ -139,6 +141,7 @@ class irods_client(object):
     """
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def list(self, path):
+        logger.info("list : " + path)
         coll = _getCollection(self.session, path)
         entries = []
         for col in coll.subcollections:
@@ -153,6 +156,7 @@ class irods_client(object):
     """
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def listStats(self, path):
+        logger.info("listStats : " + path)
         coll = _getCollection(self.session, path)
         stats = []
         for col in coll.subcollections:
@@ -164,6 +168,7 @@ class irods_client(object):
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def isDir(self, path):
+        logger.info("isDir : " + path)
         parent = os.path.dirname(path)
         coll = _getCollection(self.session, parent)
         for col in coll.subcollections:
@@ -173,6 +178,7 @@ class irods_client(object):
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def isFile(self, path):
+        logger.info("isFile : " + path)
         parent = os.path.dirname(path)
         coll = _getCollection(self.session, parent)
         for obj in coll.data_objects:
@@ -182,6 +188,7 @@ class irods_client(object):
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def exists(self, path):
+        logger.info("exists : " + path)
         stat = self.getStat(path)
         if stat:
             return True
@@ -189,6 +196,7 @@ class irods_client(object):
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def getStat(self, path):
+        logger.info("getStat : " + path)
         parent = os.path.dirname(path)
         coll = _getCollection(self.session, parent)
         for col in coll.subcollections:
@@ -203,45 +211,48 @@ class irods_client(object):
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def read(self, path, offset, size):
+        logger.info("read : " + path + ", off(" + str(offset) + "), size(" + str(size) + ")")
         buf = None
-        br = None
-        conn = None
         try:
-            conn, desc = self.session.data_objects.open(path, O_RDONLY)
-            raw = iRODSDataObjectFileRaw(conn, desc)
-            br = BufferedRandom(raw)
-            new_offset = br.seek(offset)
-            
-            if new_offset == offset:
-                buf = br.read(size)
-        finally:
-            if br:
-                br.close()
-            if conn:
-                conn.release(True)
+            logger.info("read: opening a file " + path)
+            obj = self.session.data_objects.get(path)
+            with obj.open('r') as f:
+                if offset != 0:
+                    logger.info("read: seeking at " + str(offset))
+                    new_offset = f.seek(offset)
+                    if new_offset != offset:
+                        logger.error("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+                        raise Exception("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
 
+                logger.info("read: reading size " + str(size))
+                buf = f.read(size)
+                logger.info("read: read done")
+
+        except Exception, e:
+            logger.error("read: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        logger.info("read: returning the buf(" + buf + ")")
         return buf
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def download(self, path, to):
-        conn, desc = self.session.data_objects.open(path, O_RDONLY)
-        raw = iRODSDataObjectFileRaw(conn, desc)
-        br = BufferedRandom(raw)
+        obj = self.session.data_objects.get(path)
+        with obj.open('r') as f:
+            try:
+                with open(to, 'w') as wf:
+                    while(True):
+                        buf = _readLargeBlock(f)
 
-        try:
-            with open(to, 'w') as wf:
-                while(True):
-                    buf = _readLargeBlock(br)
+                        if not buf:
+                            break
 
-                    if not buf:
-                        break
-
-                    wf.write(buf)
-        finally:
-            conn.release(True)
-            br.close()
+                        wf.write(buf)
+            except Exception, e:
+                logger.error("download: " + traceback.format_exc())
+                traceback.print_exc()
+                raise e
 
         return to
-
-
 
