@@ -24,8 +24,11 @@ import time
 import traceback
 import threading
 import os
+import imp
 import sys
 import json
+
+from types import ModuleType
 
 # import packages under src/
 test_dirpath = os.path.dirname(os.path.abspath(__file__))
@@ -33,248 +36,102 @@ driver_root = os.path.dirname(test_dirpath)
 src_root = os.path.join(driver_root, "src")
 sys.path.append(src_root)
 
-import sagfsdriver.lib.abstractfs as abstractfs
-from sagfsdriver.lib.pluginloader import pluginloader
+class syndicate_util_gateway(ModuleType):
+    @classmethod
+    def log_error(module, msg):
+        print msg
 
+    @classmethod
+    def make_metadata_command(module, op, f_type, mode, size, path, write_ttl=0):
+        return {
+            "op": op,
+            "f_type": f_type,
+            "mode": mode,
+            "size": size,
+            "path": path,
+            "write_ttl": write_ttl
+        }
 
-dataset_dir = None
-path_queue = []
-fs = None
-lock = None
+    @classmethod
+    def crawl(module, cmd):
+        print "> crawl"
+        print cmd
+        return 0 # success
 
-ENTRY_UPDATED = 0
-ENTRY_ADDED = 1
-ENTRY_REMOVED = 2
+class syndicate_util(ModuleType):
+    gateway = syndicate_util_gateway
 
-CONFIG = {
-   "DATASET_DIR":       "/tmp/test_local",
-   "EXEC_FMT":          "/usr/bin/python -m syndicate.ag.gateway",
-   "DRIVER":            "syndicate.ag.drivers.fs",
-   "DRIVER_FS_PLUGIN":  "local",
-   "DRIVER_FS_PLUGIN_CONFIG": {}
-}
+class syndicate(ModuleType):
+    util = syndicate_util
 
-SECRETS = {}
+def load_config_secrets(cs_dir):
+    if not os.path.exists(cs_dir):
+        return None, None
 
-def _initFS( driver_config, driver_secrets, role ):
-    global fs
-    global dataset_dir
+    config_data = None
+    with open(cs_dir + "/config") as conf:
+        config_data = json.load(conf)
 
-    if fs:
-        return True
-
-    # continue only when fs is not initialized
-    if not driver_config.has_key('DRIVER_FS_PLUGIN'):
-        print("No DRIVER_FS_PLUGIN defined")
-        return False
-
-    if not driver_config.has_key('DRIVER_FS_PLUGIN_CONFIG'):
-        print("No DRIVER_FS_PLUGIN_CONFIG defined")
-        return False
-
-    if not driver_config.has_key('DATASET_DIR'):
-        print("No DATASET_DIR defined")
-        return False
-
-    dataset_dir = driver_config['DATASET_DIR']
-    dataset_dir = "/" + dataset_dir.strip("/")
-
-    plugin = driver_config['DRIVER_FS_PLUGIN']
-
-    if isinstance(driver_config['DRIVER_FS_PLUGIN_CONFIG'], dict):
-        plugin_config = driver_config['DRIVER_FS_PLUGIN_CONFIG']
-    elif isinstance(driver_config['DRIVER_FS_PLUGIN_CONFIG'], basestring):
-        json_plugin_config = driver_config['DRIVER_FS_PLUGIN_CONFIG']
-        plugin_config = json.loads(json_plugin_config)
-
-    plugin_config["secrets"] = driver_secrets
-    plugin_config["dataset_root"] = dataset_dir
-
-    try:
-        loader = pluginloader()
-        fs = loader.load(plugin, plugin_config, role)
-
-        if not fs:
-            print("No such driver plugin found: %s" % plugin )
-            return False
-
-        fs.set_notification_cb(datasets_update_cb)
-        fs.connect()
-    except Exception as e:
-        print("Unable to initialize a driver")
-        print(str(e))
-        traceback.print_exc()
-        return False
-    return True
-
-def _shutdownFS():
-    global fs
-    if fs:
-        try:
-            fs.close()
-        except Exception as e:
-            pass
-    fs = None
-
-def datasets_update_cb(updated_entries, added_entries, removed_entries):
-    global path_queue
-    global lock
-
-    _lock()
-    for u in updated_entries:
-        entry = {}
-        entry["flag"] = ENTRY_UPDATED
-        entry["stat"] = u
-        path_queue.append(entry)
-        print "Updated -", entry
-
-    for a in added_entries:
-        entry = {}
-        entry["flag"] = ENTRY_ADDED
-        entry["stat"] = a
-        path_queue.append(entry)
-        print "Added -", entry
-
-    for r in removed_entries:
-        entry = {}
-        entry["flag"] = ENTRY_REMOVED
-        entry["stat"] = r
-        path_queue.append(entry)
-        print "Removed -", entry
-    _unlock()
-
-def _lock():
-    global lock
-    lock.acquire()
-
-def _unlock():
-    global lock
-    lock.release()
-
-def driver_init( driver_config, driver_secrets ):
-    """
-    Do the one-time driver setup.
-    """
-
-    global fs
-    global dataset_dir
-    global lock
-
-    lock = threading.RLock()
-
-    role = abstractfs.afsrole.DISCOVER
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "read":
-            role = abstractfs.afsrole.READ
-        elif sys.argv[1] == "crawl":
-            role = abstractfs.afsrole.DISCOVER
-
-    if not _initFS( driver_config, driver_secrets, role ):
-        print("Unable to init filesystem")
-        return False
-
-    if not fs.exists( dataset_dir ):
-        print("No such file or directory: %s" % dataset_dir )
-        return False 
-
-    if not fs.is_dir( dataset_dir ):
-        print("Not a directory: %s" % dataset_dir )
-        return False
-
-    return True
-
-
-def driver_shutdown():
-    """
-    Do the one-time driver shutdown
-    """
-    _shutdownFS()
+    secret_data = None
+    with open(cs_dir + "/secrets") as secret:
+        secret_data = json.load(secret)
     
+    return config_data, secret_data
 
-def next_dataset():
-    """
-    Return the next dataset command for the AG to process.
-    Should block until there's data.
-
-    Must call gateway.crawl() to feed the data into the AG.
-    Return True if there are more datasets to process.
-    Return False if not.
-    """
-
-    global path_queue
-
-    next_stat = None
-
-    # find the next file or directory 
-    while True:
-        next_stat = None
-        _lock()
-        if len(path_queue) > 0:
-            next_stat = path_queue[0]
-            path_queue.pop(0)
-        _unlock()
-
-        if next_stat is None:
-            # no more data
-            # stop calling this method
-            time.sleep(1)
-            continue;
-
-        flag = next_stat["flag"]
-        stat = next_stat["stat"]
-
-        if not stat.path.startswith(dataset_dir):
-            print("Not belong to a dataset: %s" % stat.path )
-            continue
-
-        publish_path = stat.path[len(dataset_dir):]
-        
-        cmd = None
-
-        if stat.directory:
-            # directory 
-            if flag == ENTRY_UPDATED or flag == ENTRY_ADDED:
-                print("> put directory %s" % publish_path)
-            elif flag == ENTRY_REMOVED:
-                print("> delete directory %s" % publish_path)
-        else:
-            # file 
-            if flag == ENTRY_UPDATED or flag == ENTRY_ADDED:
-                print("> put file %d %s" % (stat.size, publish_path))
-            elif flag == ENTRY_REMOVED:
-                print("> delete file %d %s" % (stat.size, publish_path))
-
-        continue
-
-    # have more data
-    return False
+def findDriver():
+    driver_path = os.path.abspath(src_root + "/sagfsdriver/driver/driver")
+    if os.path.exists(driver_path):
+        return imp.load_source("driver",
+                               driver_path)
+    else:
+        return None
 
 def setup_test(dataset_path):
-    pass
+    #override syndicate.util.gateway package
+    sys.modules["syndicate"] = syndicate
+    sys.modules["syndicate.util"] = syndicate_util
+    sys.modules["syndicate.util.gateway"] = syndicate_util_gateway
+
+    #override sys.argv
+    sys.argv[1] = "crawl"
+
+    #create a temp directory
+    if not os.path.exists(dataset_path):
+        os.mkdir(dataset_path)
 
 def main():
-    global CONFIG
-    global SECRETS
+    if len(sys.argv) != 2:
+        print "Usage: %s <config/secrets dir>" % sys.argv[0]
+        return
+
+    cs_dir = sys.argv[1]
+    
+    CONFIG, SECRETS = load_config_secrets(cs_dir)
+    if CONFIG == None:
+        print "cannot find config"
+        return
+
+    if SECRETS == None:
+        print "cannot find secrets"
+        return
 
     setup_test(CONFIG["DATASET_DIR"])
 
-    dinit = driver_init(CONFIG, SECRETS)
+    driver = findDriver()
+
+    dinit = driver.driver_init(CONFIG, SECRETS)
     if not dinit:
         print("cannot init driver")
         sys.exit(1)
 
-    while next_dataset():
-        pass
-
-    print("waiting 20 secs")
-    # do something
-    time.sleep(20)
-
-    while next_dataset():
-        pass
+    try:
+        while driver.next_dataset(CONFIG, SECRETS):
+            pass
+    except:
+        print "shutting down"
 
     if dinit:
-        driver_shutdown()
+        driver.driver_shutdown()
 
 
 if __name__ == "__main__":

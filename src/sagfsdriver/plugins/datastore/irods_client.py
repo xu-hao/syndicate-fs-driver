@@ -23,8 +23,9 @@ import logging
 
 from irods.session import iRODSSession
 from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
-from retrying import retry
-from timeout_decorator import timeout
+from expiringdict import ExpiringDict
+#from retrying import retry
+#from timeout_decorator import timeout
 
 logger = logging.getLogger('irods_client')
 logger.setLevel(logging.DEBUG)
@@ -42,21 +43,12 @@ MAX_ATTEMPT = 3         # 3 retries
 ATTEMPT_INTERVAL = 5000 # 5 sec
 TIMEOUT_SECONDS = 20    # 20 sec
 
+METADATA_CACHE_SIZE = 1000
+METADATA_CACHE_TTL = 60 # 60 sec
+
 """
 Timeout only works at a main thread.
 """
-
-"""
-Do not call these functions directly.
-These functions are called by irods_client class!
-"""
-#@timeout(TIMEOUT_SECONDS)
-def _getCollection(session, path):
-    return session.collections.get(path)
-
-#@timeout(TIMEOUT_SECONDS)
-def _readLargeBlock(br):
-    return br.read(1024*1024)
 
 """
 Interface class to iRODS
@@ -109,7 +101,6 @@ class irods_client(object):
                        user=None,
                        password=None,
                        zone=None):
-        logger.info("__init__")
         self.host = host
         self.port = port
         self.user = user
@@ -117,8 +108,11 @@ class irods_client(object):
         self.zone = zone
         self.session = None
 
+        # init cache
+        self.meta_cache = ExpiringDict(max_len=METADATA_CACHE_SIZE,
+                                       max_age_seconds=METADATA_CACHE_TTL)
+
     def connect(self):
-        logger.info("connect")
         self.session = iRODSSession(host=self.host, 
                                     port=self.port, 
                                     user=self.user, 
@@ -126,7 +120,6 @@ class irods_client(object):
                                     zone=self.zone)
 
     def close(self):
-        logger.info("close")
         self.session.cleanup()
 
     def __enter__(self):
@@ -136,78 +129,74 @@ class irods_client(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-    """
-    Returns directory entries in string
-    """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def list(self, path):
-        logger.info("list : " + path)
-        coll = _getCollection(self.session, path)
-        entries = []
-        for col in coll.subcollections:
-            entries.append(col.name)
+    def _ensureDirEntryStatLoaded(self, path):
+        # reuse cache
+        if path in self.meta_cache:
+            return self.meta_cache[path]
 
-        for obj in coll.data_objects:
-            entries.append(obj.name)
-        return entries
-
-    """
-    Returns directory entries with status
-    """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def listStats(self, path):
-        logger.info("listStats : " + path)
-        coll = _getCollection(self.session, path)
+        coll = self.session.collections.get(path)
         stats = []
         for col in coll.subcollections:
             stats.append(irods_status.fromCollection(col))
 
         for obj in coll.data_objects:
             stats.append(irods_status.fromDataObject(obj))
+
+        self.meta_cache[path] = stats
         return stats
 
+    """
+    Returns irods_status
+    """
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def isDir(self, path):
-        logger.info("isDir : " + path)
+    def stat(self, path):
         parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for col in coll.subcollections:
-            if col.path == path:
-                return True
-        return False
+        stats = self._ensureDirEntryStatLoaded(parent)
+        if stats:
+            for stat in stats:
+                if stat.path == path:
+                    return stat
+        return None
+
+    """
+    Returns directory entries in string
+    """
+    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
+    def list_dir(self, path):
+        stats = self._ensureDirEntryStatLoaded(path)
+        if stats:
+            entries = []
+            for stat in stats:
+                entries.append(stat.name)
+            return entries
+        return None
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def isFile(self, path):
-        logger.info("isFile : " + path)
-        parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for obj in coll.data_objects:
-            if obj.path == path:
-                return True
+    def is_dir(self, path):
+        stat = self.stat(path)
+        if stat:
+            return stat.directory
         return False
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def exists(self, path):
-        logger.info("exists : " + path)
-        stat = self.getStat(path)
+        stat = self.stat(path)
         if stat:
             return True
         return False
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def getStat(self, path):
-        logger.info("getStat : " + path)
-        parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for col in coll.subcollections:
-            if col.path == path:
-                return irods_status.fromCollection(col)
-
-        for obj in coll.data_objects:
-            if obj.path == path:
-                return irods_status.fromDataObject(obj)
-
-        return None
+    def clear_stat_cache(self, path=None):
+        if(path):
+            if path in self.meta_cache:
+                # directory
+                del self.meta_cache[path]
+            else:
+                # file
+                parent = os.path.dirname(path)
+                if parent in self.meta_cache:
+                    del self.meta_cache[parent]
+        else:
+            self.meta_cache.clear
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def read(self, path, offset, size):
@@ -243,7 +232,7 @@ class irods_client(object):
             try:
                 with open(to, 'w') as wf:
                     while(True):
-                        buf = _readLargeBlock(f)
+                        buf = f.read(1024*1024)
 
                         if not buf:
                             break

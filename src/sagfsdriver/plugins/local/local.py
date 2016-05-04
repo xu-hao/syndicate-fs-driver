@@ -21,14 +21,13 @@ Local-filesystem Plugin
 """
 import os
 import sys
-import errno
 import time
 import stat
 import logging
+import threading
 import pyinotify
 
 import sagfsdriver.lib.abstractfs as abstractfs
-import sagfsdriver.lib.metadata as metadata
 
 logger = logging.getLogger('syndicate_local_filesystem')
 logger.setLevel(logging.DEBUG)
@@ -63,14 +62,15 @@ class InotifyEventHandler(pyinotify.ProcessEvent):
 
     def process_IN_MOVED_FROM(self, event):
         logger.info("Moving a file from : %s" % event.pathname)
-        self.plugin.on_update_detected("create", event.pathname)
+        self.plugin.on_update_detected("remove", event.pathname)
 
     def process_IN_MOVED_TO(self, event):
         logger.info("Moving a file to : %s" % event.pathname)
-        self.plugin.on_update_detected("remove", event.pathname)
+        self.plugin.on_update_detected("create", event.pathname)
 
     def process_default(self, event):
         logger.info("Unhandled event to a file : %s" % event.pathname)
+        logger.info("- %s" % event)
 
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
@@ -86,7 +86,7 @@ class plugin_impl(abstractfs.afsbase):
 
         # config can have unicode strings
         dataset_root = dataset_root.encode('ascii','ignore')
-        dataset_root = dataset_root.rstrip("/")
+        self.dataset_root = dataset_root.rstrip("/")
 
         if self.role == abstractfs.afsrole.DISCOVER:
             # set inotify
@@ -95,92 +95,67 @@ class plugin_impl(abstractfs.afsbase):
             self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
                                                        self.notify_handler)
 
-            # init dataset tracker
-            self.dataset_tracker = metadata.datasetmeta(root_path=dataset_root,
-                                                        update_event_handler=self._on_dataset_update, 
-                                                        request_for_update_handler=self._on_request_update)
-
         self.notification_cb = None
+        # create a re-entrant lock (not a read lock)
+        self.lock = threading.RLock()
+
+    def _lock(self):
+        self.lock.acquire()
+
+    def _unlock(self):
+        self.lock.release()
 
     def on_update_detected(self, operation, path):
-        if operation in ["create", "remove", "modify"]:
-            if path:
-                parent_path = os.path.dirname(path)
-                entries = os.listdir(parent_path)
-                stats = []
-                for entry in entries:
-                    # entry is a filename
-                    entry_path = os.path.join(parent_path, entry)
-                    # get stat
-                    sb = os.stat(entry_path)
+        ascii_path = path.encode('ascii','ignore')
+        driver_path = self._make_driver_path(ascii_path)
 
-                    st = abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
-                                            path=entry_path,
-                                            name=entry, 
-                                            size=sb.st_size,
-                                            checksum=0,
-                                            create_time=sb.st_ctime,
-                                            modify_time=sb.st_mtime)
-                    stats.append(st)
-                self.dataset_tracker.updateDirectory(path=parent_path, entries=stats)
+        if operation == "remove":
+            if self.notification_cb:
+                entry = {}
+                entry["path"] = driver_path
+                entry["stat"] = None
+                self.notification_cb([], [], [entry])
+        elif operation in ["create", "modify"]:
+            if self.notification_cb:
+                st = self.stat(driver_path)
+                entry = {}
+                entry["path"] = driver_path
+                entry["stat"] = st
+                if operation == "create":
+                    self.notification_cb([], [entry], [])
+                elif operation == "modify":
+                    self.notification_cb([entry], [], [])
 
-    def _on_dataset_update(self, updated_entries, added_entries, removed_entries):
-        if self.notification_cb:
-            self.notification_cb(updated_entries, added_entries, removed_entries)
+    def _make_localfs_path(self, path):
+        if path.startswith(self.dataset_root):
+            return path
+        
+        if path.startswith("/"):
+            return self.dataset_root + path
 
-    def _on_request_update(self, entry):
-        entries = os.listdir(entry.path)
-        stats = []
-        for e in entries:
-                # entry is a filename
-                entry_path = os.path.join(entry.path, e)
-                # get stat
-                sb = os.stat(entry_path)
+        return self.dataset_root + "/" + path
 
-                st = abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
-                                        path=entry_path,
-                                        name=e, 
-                                        size=sb.st_size,
-                                        checksum=0,
-                                        create_time=sb.st_ctime,
-                                        modify_time=sb.st_mtime)
-                stats.append(st)
-
-        self.dataset_tracker.updateDirectory(path=entry.path, entries=stats)
+    def _make_driver_path(self, path):
+        if path.startswith(self.dataset_root):
+            return path[len(self.dataset_root):]
+        return path
 
     def connect(self):
         if self.role == abstractfs.afsrole.DISCOVER:
-            dataset_root = self.dataset_tracker.getRootPath()
-            if not os.path.exists(dataset_root):
+            if not os.path.exists(self.dataset_root):
                 raise IOError("dataset root does not exist")
 
-            # start monitoring
-            self.notifier.start()
+            try:
+                # start monitoring
+                self.notifier.start()
 
-            mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
-            self.watch_directory = self.watch_manager.add_watch(dataset_root, 
-                                                                mask, 
-                                                                rec=True,
-                                                                auto_add=True)
-
-            # add initial dataset
-            entries = os.listdir(dataset_root)
-            stats = []
-            for entry in entries:
-                # entry is a filename
-                entry_path = os.path.join(dataset_root, entry)
-                # get stat
-                sb = os.stat(entry_path)
-
-                st = abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
-                                        path=entry_path,
-                                        name=entry, 
-                                        size=sb.st_size,
-                                        checksum=0,
-                                        create_time=sb.st_ctime,
-                                        modify_time=sb.st_mtime)
-                stats.append(st)
-            self.dataset_tracker.updateDirectory(path=dataset_root, entries=stats)
+                mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
+                self.watch_directory = self.watch_manager.add_watch(self.dataset_root, 
+                                                                    mask, 
+                                                                    rec=True,
+                                                                    auto_add=True)
+            except:
+                self.close()
 
     def close(self):
         if self.role == abstractfs.afsrole.DISCOVER:
@@ -190,32 +165,66 @@ class plugin_impl(abstractfs.afsbase):
             if self.notifier:
                 self.notifier.stop()
 
-    def exists(self, path):
+    def stat(self, path):
+        self._lock()
         ascii_path = path.encode('ascii','ignore')
-        return os.path.exists(ascii_path)
+        localfs_path = self._make_localfs_path(ascii_path)
+        driver_path = self._make_driver_path(ascii_path)
+        # get stat
+        sb = os.stat(localfs_path)
+        self._unlock()
+        return abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode), 
+                                  path=driver_path,
+                                  name=os.path.basename(driver_path), 
+                                  size=sb.st_size,
+                                  checksum=0,
+                                  create_time=sb.st_ctime,
+                                  modify_time=sb.st_mtime)
+
+    def exists(self, path):
+        self._lock()
+        ascii_path = path.encode('ascii','ignore')
+        localfs_path = self._make_localfs_path(ascii_path)
+        exist = os.path.exists(localfs_path)
+        self._unlock()
+        return exist
 
     def list_dir(self, dirpath):
+        self._lock()
         ascii_path = dirpath.encode('ascii','ignore')
-        return os.listdir(ascii_path)
+        localfs_path = self._make_localfs_path(ascii_path)
+        l = os.listdir(localfs_path)
+        self._unlock()
+        return l
 
     def is_dir(self, dirpath):
+        self._lock()
         ascii_path = dirpath.encode('ascii','ignore')
-        if os.path.exists(ascii_path):
-            sb = os.stat(ascii_path)
-            return stat.S_ISDIR(sb.st_mode)
-        return False
+        localfs_path = self._make_localfs_path(ascii_path)
+        d = False
+        if os.path.exists(localfs_path):
+            sb = os.stat(localfs_path)
+            d = stat.S_ISDIR(sb.st_mode)
+        self._unlock()
+        return d
 
     def read(self, filepath, offset, size):
+        self._lock()
         ascii_path = filepath.encode('ascii','ignore')
+        localfs_path = self._make_localfs_path(ascii_path)
         buf = None
         try:
-            with open(ascii_path, "r") as f:
+            with open(localfs_path, "r") as f:
                 f.seek(offset)
                 buf = f.read(size)
         except Exception, e:
-            logger.error("Failed to read %s: %s" % (file_path, e))
-            sys.exit(1)
+            logger.error("Failed to read %s: %s" % (localfs_path, e))
+
+        self._unlock()
         return buf
+
+    def clear_cache(self, path):
+        pass
 
     def plugin(self):
         return self.__class__

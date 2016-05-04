@@ -16,16 +16,16 @@
    limitations under the License.
 """
 
+import traceback
 import os
 import irods
 import logging
 
-from os import O_RDONLY
-from io import RawIOBase, BufferedRandom
 from irods.session import iRODSSession
 from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
-from retrying import retry
-from timeout_decorator import timeout
+from expiringdict import ExpiringDict
+#from retrying import retry
+#from timeout_decorator import timeout
 
 logger = logging.getLogger('irods_client')
 logger.setLevel(logging.DEBUG)
@@ -43,21 +43,12 @@ MAX_ATTEMPT = 3         # 3 retries
 ATTEMPT_INTERVAL = 5000 # 5 sec
 TIMEOUT_SECONDS = 20    # 20 sec
 
+METADATA_CACHE_SIZE = 1000
+METADATA_CACHE_TTL = 60 # 60 sec
+
 """
 Timeout only works at a main thread.
 """
-
-"""
-Do not call these functions directly.
-These functions are called by irods_client class!
-"""
-#@timeout(TIMEOUT_SECONDS)
-def _getCollection(session, path):
-    return session.collections.get(path)
-
-#@timeout(TIMEOUT_SECONDS)
-def _readLargeBlock(br):
-    return br.read(1024*1024)
 
 """
 Interface class to iRODS
@@ -117,6 +108,10 @@ class irods_client(object):
         self.zone = zone
         self.session = None
 
+        # init cache
+        self.meta_cache = ExpiringDict(max_len=METADATA_CACHE_SIZE,
+                                       max_age_seconds=METADATA_CACHE_TTL)
+
     def connect(self):
         self.session = iRODSSession(host=self.host, 
                                     port=self.port, 
@@ -134,114 +129,119 @@ class irods_client(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-    """
-    Returns directory entries in string
-    """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def list(self, path):
-        coll = _getCollection(self.session, path)
-        entries = []
-        for col in coll.subcollections:
-            entries.append(col.name)
+    def _ensureDirEntryStatLoaded(self, path):
+        # reuse cache
+        if path in self.meta_cache:
+            return self.meta_cache[path]
 
-        for obj in coll.data_objects:
-            entries.append(obj.name)
-        return entries
-
-    """
-    Returns directory entries with status
-    """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def listStats(self, path):
-        coll = _getCollection(self.session, path)
+        coll = self.session.collections.get(path)
         stats = []
         for col in coll.subcollections:
             stats.append(irods_status.fromCollection(col))
 
         for obj in coll.data_objects:
             stats.append(irods_status.fromDataObject(obj))
+
+        self.meta_cache[path] = stats
         return stats
 
+    """
+    Returns irods_status
+    """
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def isDir(self, path):
+    def stat(self, path):
         parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for col in coll.subcollections:
-            if col.path == path:
-                return True
-        return False
+        stats = self._ensureDirEntryStatLoaded(parent)
+        if stats:
+            for stat in stats:
+                if stat.path == path:
+                    return stat
+        return None
+
+    """
+    Returns directory entries in string
+    """
+    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
+    def list_dir(self, path):
+        stats = self._ensureDirEntryStatLoaded(path)
+        if stats:
+            entries = []
+            for stat in stats:
+                entries.append(stat.name)
+            return entries
+        return None
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def isFile(self, path):
-        parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for obj in coll.data_objects:
-            if obj.path == path:
-                return True
+    def is_dir(self, path):
+        stat = self.stat(path)
+        if stat:
+            return stat.directory
         return False
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def exists(self, path):
-        stat = self.getStat(path)
+        stat = self.stat(path)
         if stat:
             return True
         return False
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
-    def getStat(self, path):
-        parent = os.path.dirname(path)
-        coll = _getCollection(self.session, parent)
-        for col in coll.subcollections:
-            if col.path == path:
-                return irods_status.fromCollection(col)
-
-        for obj in coll.data_objects:
-            if obj.path == path:
-                return irods_status.fromDataObject(obj)
-
-        return None
+    def clear_stat_cache(self, path=None):
+        if(path):
+            if path in self.meta_cache:
+                # directory
+                del self.meta_cache[path]
+            else:
+                # file
+                parent = os.path.dirname(path)
+                if parent in self.meta_cache:
+                    del self.meta_cache[parent]
+        else:
+            self.meta_cache.clear
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def read(self, path, offset, size):
+        logger.info("read : " + path + ", off(" + str(offset) + "), size(" + str(size) + ")")
         buf = None
-        br = None
-        conn = None
         try:
-            conn, desc = self.session.data_objects.open(path, O_RDONLY)
-            raw = iRODSDataObjectFileRaw(conn, desc)
-            br = BufferedRandom(raw)
-            new_offset = br.seek(offset)
-            
-            if new_offset == offset:
-                buf = br.read(size)
-        finally:
-            if br:
-                br.close()
-            if conn:
-                conn.release(True)
+            logger.info("read: opening a file " + path)
+            obj = self.session.data_objects.get(path)
+            with obj.open('r') as f:
+                if offset != 0:
+                    logger.info("read: seeking at " + str(offset))
+                    new_offset = f.seek(offset)
+                    if new_offset != offset:
+                        logger.error("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+                        raise Exception("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
 
+                logger.info("read: reading size " + str(size))
+                buf = f.read(size)
+                logger.info("read: read done")
+
+        except Exception, e:
+            logger.error("read: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        logger.info("read: returning the buf(" + buf + ")")
         return buf
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def download(self, path, to):
-        conn, desc = self.session.data_objects.open(path, O_RDONLY)
-        raw = iRODSDataObjectFileRaw(conn, desc)
-        br = BufferedRandom(raw)
+        obj = self.session.data_objects.get(path)
+        with obj.open('r') as f:
+            try:
+                with open(to, 'w') as wf:
+                    while(True):
+                        buf = f.read(1024*1024)
 
-        try:
-            with open(to, 'w') as wf:
-                while(True):
-                    buf = _readLargeBlock(br)
+                        if not buf:
+                            break
 
-                    if not buf:
-                        break
-
-                    wf.write(buf)
-        finally:
-            conn.release(True)
-            br.close()
+                        wf.write(buf)
+            except Exception, e:
+                logger.error("download: " + traceback.format_exc())
+                traceback.print_exc()
+                raise e
 
         return to
-
-
 

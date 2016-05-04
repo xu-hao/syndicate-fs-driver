@@ -90,6 +90,11 @@ class afsbase(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
+    # get stat of path (a file or a directory)
+    @abstractmethod
+    def stat(self, path):
+        pass
+
     # check existence of path (a file or a directory) and return True/False
     @abstractmethod
     def exists(self, path):
@@ -108,6 +113,11 @@ class afsbase(object):
     # read bytes at given offset in given size from given path and return byte[]
     @abstractmethod
     def read(self, filepath, offset, size):
+        pass
+
+    # clear cache if exists
+    @abstractmethod
+    def clear_cache(self, path):
         pass
 
     # return a class of plugin
