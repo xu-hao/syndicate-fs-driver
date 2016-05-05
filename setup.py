@@ -35,9 +35,8 @@ for plugin in plugins:
 # dependencies
 dependencies = ['pika',
                 'python-irodsclient',
-                'retrying',
-                'timeout_decorator',
-                'pyinotify']
+                'pyinotify',
+                'expiringdict']
 
 setup(name='sagfsdriver',
       version='0.1',
