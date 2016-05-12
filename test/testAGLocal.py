@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """
    Copyright 2016 The Trustees of Princeton University
@@ -79,7 +79,7 @@ def load_config_secrets(cs_dir):
     return config_data, secret_data
 
 def findDriver():
-    driver_path = os.path.abspath(src_root + "/sagfsdriver/driver/driver")
+    driver_path = os.path.abspath(src_root + "/sgfsdriver/driver/driver")
     if os.path.exists(driver_path):
         return imp.load_source("driver",
                                driver_path)

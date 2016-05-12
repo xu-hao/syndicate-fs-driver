@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-   Copyright 2014 The Trustees of Princeton University
+   Copyright 2016 The Trustees of Princeton University
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import time
 import threading
 import sqlite3
 
-import sagfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.lib.abstractfs as abstractfs
 
 
 def get_current_time():

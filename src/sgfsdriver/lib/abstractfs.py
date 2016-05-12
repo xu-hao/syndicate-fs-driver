@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-   Copyright 2014 The Trustees of Princeton University
+   Copyright 2016 The Trustees of Princeton University
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ class afsstat(object):
 class afsrole:
     DISCOVER = 1
     READ = 2
+    WRITE = 3
 
 class afsbase(object):
     __metaclass__ = ABCMeta
@@ -110,9 +111,24 @@ class afsbase(object):
     def is_dir(self, dirpath):
         pass
 
+    # make a directory hierarchy
+    @abstractmethod
+    def make_dirs(self, dirpath):
+        pass
+
     # read bytes at given offset in given size from given path and return byte[]
     @abstractmethod
     def read(self, filepath, offset, size):
+        pass
+
+    # write bytes to given path with bytes
+    @abstractmethod
+    def write(self, filepath, buf):
+        pass
+
+    # remove given file
+    @abstractmethod
+    def unlink(self, filepath):
         pass
 
     # clear cache if exists

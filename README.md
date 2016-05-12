@@ -1,5 +1,5 @@
 # syndicate-fs-driver
-Syndicate filesystem driver and its plugins
+Syndicate Gateway filesystem driver and plugins
 
 Build
 =====
@@ -9,7 +9,7 @@ To build, type:
 sudo ./setup.py install
 ```
 
-Modules installed will be located under `/usr/loca/lib/python2.7/dist-packages/sagfsdriver`
+Modules installed will be located under `/usr/local/lib/python2.7/dist-packages/sgfsdriver`
 
 Supported plugins
 =================

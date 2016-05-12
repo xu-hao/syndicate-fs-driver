@@ -1,7 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """
-   Copyright 2013 The Trustees of Princeton University
+   Copyright 2016 The Trustees of Princeton University
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -22,15 +22,15 @@ import os
 import sys
 import shutil
 
-packages = ['sagfsdriver',
-            'sagfsdriver.lib',
-            'sagfsdriver.plugins']
+packages = ['sgfsdriver',
+            'sgfsdriver.lib',
+            'sgfsdriver.plugins']
 
 # detect plugins
-plugins = os.listdir('src/sagfsdriver/plugins')
+plugins = os.listdir('src/sgfsdriver/plugins')
 for plugin in plugins:
-    if os.path.isdir(os.path.join('src/sagfsdriver/plugins', plugin)):
-        packages.append('sagfsdriver.plugins.' + plugin)
+    if os.path.isdir(os.path.join('src/sgfsdriver/plugins', plugin)):
+        packages.append('sgfsdriver.plugins.' + plugin)
 
 # dependencies
 dependencies = ['pika',
@@ -38,16 +38,16 @@ dependencies = ['pika',
                 'pyinotify',
                 'expiringdict']
 
-setup(name='sagfsdriver',
+setup(name='sgfsdriver',
       version='0.1',
-      description='Syndicate AG Filesystem Driver',
+      description='Syndicate Gateway Filesystem Driver',
       url='https://github.com/syndicate-storage/syndicate-fs-driver',
       author='Illyoung Choi',
       author_email='syndicate@lists.cs.princeton.edu',
       license='Apache 2.0',
       packages = packages,
       package_dir = {
-                  'sagfsdriver': 'src/sagfsdriver'
+                  'sgfsdriver': 'src/sgfsdriver'
       },
       install_requires = dependencies,
       zip_safe=False)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-   Copyright 2014 The Trustees of Princeton University
+   Copyright 2016 The Trustees of Princeton University
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -178,6 +178,14 @@ class irods_client(object):
             return stat.directory
         return False
 
+    def make_dirs(self, path):
+        if not self.exists(path):
+            # make parent dir first
+            self.make_dirs(os.path.dirname(path))
+            self.session.collections.create(path)
+            # invalidate stat cache
+            self.clear_stat_cache(os.path.dirname(path))
+
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def exists(self, path):
         stat = self.stat(path)
@@ -196,7 +204,7 @@ class irods_client(object):
                 if parent in self.meta_cache:
                     del self.meta_cache[parent]
         else:
-            self.meta_cache.clear
+            self.meta_cache.clear()
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def read(self, path, offset, size):
@@ -224,6 +232,39 @@ class irods_client(object):
 
         logger.info("read: returning the buf(" + buf + ")")
         return buf
+
+    def write(self, path, buf):
+        logger.info("write : " + path)
+        try:
+            logger.info("write: creating a file " + path)
+            obj = self.session.data_objects.create(path)
+            with obj.open('w') as f:
+                logger.info("write: writing buffer " + len(buf))
+                f.write(buf)
+                logger.info("write: writing done")
+
+        except Exception, e:
+            logger.error("write: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        # invalidate stat cache
+        self.clear_stat_cache(os.path.dirname(path))
+
+    def unlink(self, path):
+        logger.info("unlink : " + path)
+        try:
+            logger.info("unlink: deleting a file " + path)
+            self.session.data_objects.unlink(path)
+            logger.info("unlink: deleting done")
+
+        except Exception, e:
+            logger.error("unlink: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        # invalidate stat cache
+        self.clear_stat_cache(os.path.dirname(path))
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def download(self, path, to):

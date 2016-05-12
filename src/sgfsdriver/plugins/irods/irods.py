@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-   Copyright 2014 The Trustees of Princeton University
+   Copyright 2016 The Trustees of Princeton University
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import os
 import time
 import logging
 import threading
-import sagfsdriver.lib.abstractfs as abstractfs
-import sagfsdriver.plugins.datastore.irods_client as irods_client
+import sgfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.plugins.datastore.irods_client as irods_client
 
 logger = logging.getLogger('syndicate_iRODS_filesystem')
 logger.setLevel(logging.DEBUG)
@@ -42,9 +42,9 @@ class plugin_impl(abstractfs.afsbase):
         if not config:
             raise ValueError("fs configuration is not given correctly")
 
-        dataset_root = config.get("dataset_root")
-        if not dataset_root:
-            raise ValueError("dataset_root configuration is not given correctly")
+        work_root = config.get("work_root")
+        if not work_root:
+            raise ValueError("work_root configuration is not given correctly")
 
         secrets = config.get("secrets")
         if not secrets:
@@ -68,8 +68,8 @@ class plugin_impl(abstractfs.afsbase):
         self.role = role
 
         # config can have unicode strings
-        dataset_root = dataset_root.encode('ascii','ignore')
-        self.dataset_root = dataset_root.rstrip("/")
+        work_root = work_root.encode('ascii','ignore')
+        self.work_root = work_root.rstrip("/")
 
         self.irods_config = irods_config
 
@@ -98,6 +98,9 @@ class plugin_impl(abstractfs.afsbase):
     def _unlock(self):
         self.lock.release()
 
+    def _get_lock(self):
+        return self.lock
+
     def on_update_detected(self, operation, path):
         ascii_path = path.encode('ascii','ignore')
         driver_path = self._make_driver_path(ascii_path)
@@ -121,17 +124,17 @@ class plugin_impl(abstractfs.afsbase):
                     self.notification_cb([entry], [], [])
 
     def _make_irods_path(self, path):
-        if path.startswith(self.dataset_root):
+        if path.startswith(self.work_root):
             return path
         
         if path.startswith("/"):
-            return self.dataset_root + path
+            return self.work_root + path
 
-        return self.dataset_root + "/" + path
+        return self.work_root + "/" + path
 
     def _make_driver_path(self, path):
-        if path.startswith(self.dataset_root):
-            return path[len(self.dataset_root):]
+        if path.startswith(self.work_root):
+            return path[len(self.work_root):]
         return path
 
     def connect(self):
@@ -139,8 +142,8 @@ class plugin_impl(abstractfs.afsbase):
         self.irods.connect()
 
         if self.role == abstractfs.afsrole.DISCOVER:
-            if not self.irods.exists(self.dataset_root):
-                raise IOError("dataset root does not exist")
+            if not self.irods.exists(self.work_root):
+                raise IOError("work_root does not exist")
 
     def close(self):
         logger.info("close")
@@ -149,67 +152,76 @@ class plugin_impl(abstractfs.afsbase):
             self.irods.close()
 
     def stat(self, path):
-        self._lock()
-        ascii_path = path.encode('ascii','ignore')
-        irods_path = self._make_irods_path(ascii_path)
-        driver_path = self._make_driver_path(ascii_path)
-        # get stat
-        sb = self.irods.stat(irods_path)
-        self._unlock()
-        return abstractfs.afsstat(directory=sb.directory, 
-                                  path=driver_path,
-                                  name=os.path.basename(driver_path), 
-                                  size=sb.size,
-                                  checksum=sb.checksum,
-                                  create_time=sb.create_time,
-                                  modify_time=sb.modify_time)
-
-    def exists(self, path):
-        self._lock()
-        ascii_path = path.encode('ascii','ignore')
-        irods_path = self._make_irods_path(ascii_path)
-        exist = self.irods.exists(irods_path)
-        self._unlock()
-        return exist
-
-    def list_dir(self, dirpath):
-        self._lock()
-        ascii_path = dirpath.encode('ascii','ignore')
-        irods_path = self._make_irods_path(ascii_path)
-        l = self.irods.list_dir(irods_path)
-        self._unlock()
-        return l
-
-    def is_dir(self, dirpath):
-        self._lock()
-        ascii_path = dirpath.encode('ascii','ignore')
-        irods_path = self._make_irods_path(ascii_path)
-        d = self.irods.is_dir(irods_path)
-        self._unlock()
-        return d
-
-    def read(self, filepath, offset, size):
-        self._lock()
-        ascii_path = filepath.encode('ascii','ignore')
-        irods_path = self._make_irods_path(ascii_path)
-        buf = None
-        try:
-            buf = self.irods.read(irods_path, offset, size)
-        except Exception, e:
-            logger.error("Failed to read %s: %s" % (irods_path, e))
-
-        self._unlock()
-        return buf
-
-    def clear_cache(self, path):
-        self._lock()
-        if path:
+        with self._get_lock():
             ascii_path = path.encode('ascii','ignore')
             irods_path = self._make_irods_path(ascii_path)
-            self.irods.clear_stat_cache(irods_path)
-        else:
-            self.irods.clear_stat_cache(None)
-        self._unlock()
+            driver_path = self._make_driver_path(ascii_path)
+            # get stat
+            sb = self.irods.stat(irods_path)
+            return abstractfs.afsstat(directory=sb.directory,
+                                      path=driver_path,
+                                      name=os.path.basename(driver_path),
+                                      size=sb.size,
+                                      checksum=sb.checksum,
+                                      create_time=sb.create_time,
+                                      modify_time=sb.modify_time)
+
+    def exists(self, path):
+        with self._get_lock():
+            ascii_path = path.encode('ascii','ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            exist = self.irods.exists(irods_path)
+            return exist
+
+    def list_dir(self, dirpath):
+        with self._get_lock():
+            ascii_path = dirpath.encode('ascii','ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            l = self.irods.list_dir(irods_path)
+            return l
+
+    def is_dir(self, dirpath):
+        with self._get_lock():
+            ascii_path = dirpath.encode('ascii','ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            d = self.irods.is_dir(irods_path)
+            return d
+
+    def make_dirs(self, dirpath):
+        with self._get_lock():
+            ascii_path = dirpath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            if not self.exists(irods_path):
+                self.irods.make_dirs(irods_path)
+
+    def read(self, filepath, offset, size):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii','ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            buf = self.irods.read(irods_path, offset, size)
+            return buf
+
+    def write(self, filepath, buf):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            self.irods.write(irods_path, buf)
+
+    def clear_cache(self, path):
+        with self._get_lock():
+            if path:
+                ascii_path = path.encode('ascii', 'ignore')
+                irods_path = self._make_irods_path(ascii_path)
+                self.irods.clear_stat_cache(irods_path)
+            else:
+                self.irods.clear_stat_cache(None)
+
+    def unlink(self, filepath):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            if not self.exists(irods_path):
+                self.irods.unlink(irods_path)
 
     def plugin(self):
         return self.__class__

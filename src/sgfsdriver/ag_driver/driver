@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """
    Copyright 2016 The Trustees of Princeton University
@@ -33,7 +33,7 @@ import sagfsdriver.lib.abstractfs as abstractfs
 
 from sagfsdriver.lib.pluginloader import pluginloader
 
-dataset_dir = None
+storage_dir = None
 fs = None
 lock = None
 
@@ -48,7 +48,7 @@ DEFAULT_WRITE_TTL = 1000 * 60 * 5 # 5mins
 
 def _initFS( driver_config, driver_secrets, role ):
     global fs
-    global dataset_dir
+    global storage_dir
 
     if fs:
         return True
@@ -78,7 +78,7 @@ def _initFS( driver_config, driver_secrets, role ):
         plugin_config = json.loads( json_plugin_config )
 
     plugin_config["secrets"] = driver_secrets
-    plugin_config["dataset_root"] = dataset_dir
+    plugin_config["work_root"] = dataset_dir
 
     try:
         loader = pluginloader()
@@ -169,7 +169,7 @@ def driver_init( driver_config, driver_secrets ):
     """
 
     global fs
-    global dataset_dir
+    global storage_dir
     global lock
 
     # create a re-entrant lock (not a read lock)
@@ -283,7 +283,7 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
     """
 
     global fs
-    global dataset_dir
+    global storage_dir
 
     path = gateway.request_path( request )
     file_path = gateway.path_join( "/", path )
