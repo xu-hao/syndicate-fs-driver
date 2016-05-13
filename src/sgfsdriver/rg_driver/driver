@@ -87,7 +87,7 @@ def _shutdownFS():
     if fs:
         try:
             fs.close()
-        except Exception as e:
+        except Exception:
             pass
     fs = None
 
@@ -133,7 +133,7 @@ def read_chunk( chunk_request, outfile, config, secrets ):
 
     try:
         outfile.write( fs.read( chunk_path, 0, sys.maxint ) )
-    except Exception, e:
+    except Exception:
         gateway.log_error(traceback.format_exc())
         return -errno.EIO
     return 0
@@ -151,7 +151,7 @@ def write_chunk( chunk_request, chunk_buf, config, secrets ):
 
     try:
         fs.write( chunk_path, chunk_buf )
-    except Exception, e:
+    except Exception:
         gateway.log_error(traceback.format_exc())
         return -errno.EIO
     return 0
@@ -174,7 +174,7 @@ def delete_chunk( chunk_request, config, secrets ):
 
     try:
         fs.unlink( chunk_path )
-    except Exception, e:
+    except Exception:
         gateway.log_error(traceback.format_exc())
         return -errno.EIO
     return 0

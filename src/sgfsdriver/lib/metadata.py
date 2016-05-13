@@ -91,11 +91,8 @@ class dbmanager(object):
         db_cursor = self.db_conn.cursor()
         entries = []
         for row_path, row_filename, row_status, row_registered_time in db_cursor.execute("SELECT * FROM tbl_dataset WHERE path=? ORDER BY filename", (path,)):
-            entry = {}
-            entry["path"] = row_path
-            entry["filename"] = row_filename
-            entry["status"] = abstractfs.afsstat.fromJson(row_status)
-            entry["registered_time"] = row_registered_time
+            entry = {"path": row_path, "filename": row_filename, "status": abstractfs.afsstat.fromJson(row_status),
+                     "registered_time": row_registered_time}
             entries.append(entry)
 
         self._unlock()
@@ -153,7 +150,10 @@ class datasetmeta(object):
                 if updated_entry.directory:
                     self._onRequestUpdate(updated_entry)
 
-    def updateDirectory(self, path=None, entries=[]):
+    def updateDirectory(self, path=None, entries=None):
+        if entries is None:
+            entries = []
+
         with self.lock:
             # find removed/added/updated entries
             old_entries = {}
@@ -219,7 +219,6 @@ class datasetmeta(object):
             self._onDirectoryUpdate(updated_entries, added_entries, removed_entries)
 
     def getDirectory(self, path):
-        entries = None
         with self.lock:
             entries = self.dbmanager.getDirectoryEntries(path)
         return entries

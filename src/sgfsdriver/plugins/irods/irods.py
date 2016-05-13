@@ -108,16 +108,12 @@ class plugin_impl(abstractfs.afsbase):
         self.clear_cache(driver_path)
         if operation == "remove":
             if self.notification_cb:
-                entry = {}
-                entry["path"] = driver_path
-                entry["stat"] = None
+                entry = {"path": driver_path, "stat": None}
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
                 st = self.stat(driver_path)
-                entry = {}
-                entry["path"] = driver_path
-                entry["stat"] = st
+                entry = {"path": driver_path, "stat": st}
                 if operation == "create":
                     self.notification_cb([], [entry], [])
                 elif operation == "modify":

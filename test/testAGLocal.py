@@ -107,11 +107,11 @@ def main():
     cs_dir = sys.argv[1]
     
     CONFIG, SECRETS = load_config_secrets(cs_dir)
-    if CONFIG == None:
+    if CONFIG is None:
         print "cannot find config"
         return
 
-    if SECRETS == None:
+    if SECRETS is None:
         print "cannot find secrets"
         return
 

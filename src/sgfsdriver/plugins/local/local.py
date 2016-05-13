@@ -114,16 +114,12 @@ class plugin_impl(abstractfs.afsbase):
 
         if operation == "remove":
             if self.notification_cb:
-                entry = {}
-                entry["path"] = driver_path
-                entry["stat"] = None
+                entry = {"path": driver_path, "stat": None}
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
                 st = self.stat(driver_path)
-                entry = {}
-                entry["path"] = driver_path
-                entry["stat"] = st
+                entry = {"path": driver_path, "stat": st}
                 if operation == "create":
                     self.notification_cb([], [entry], [])
                 elif operation == "modify":
@@ -218,7 +214,6 @@ class plugin_impl(abstractfs.afsbase):
         with self._get_lock():
             ascii_path = filepath.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
-            buf = None
             with open(localfs_path, "r") as f:
                 f.seek(offset)
                 buf = f.read(size)

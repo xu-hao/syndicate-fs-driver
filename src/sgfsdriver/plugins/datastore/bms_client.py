@@ -229,7 +229,7 @@ class bms_client(object):
         self.connection.ioloop.stop()
 
         if not self.closing:
-            self.connection = self.connect()
+            self.connect()
 
     def close(self):
         self.closing = True

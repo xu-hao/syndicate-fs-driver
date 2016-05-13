@@ -102,7 +102,7 @@ def _shutdownFS():
     if fs:
         try:
             fs.close()
-        except Exception as e:
+        except Exception:
             pass
     fs = None
 
@@ -112,24 +112,15 @@ def datasets_update_cb( updated_entries, added_entries, removed_entries ):
 
     _lock()
     for u in updated_entries:
-        entry = {}
-        entry["flag"] = ENTRY_UPDATED
-        entry["path"] = u["path"]
-        entry["stat"] = u["stat"]
+        entry = {"flag": ENTRY_UPDATED, "path": u["path"], "stat": u["stat"]}
         path_queue.append( entry )
 
     for a in added_entries:
-        entry = {}
-        entry["flag"] = ENTRY_ADDED
-        entry["path"] = a["path"]
-        entry["stat"] = a["stat"]
+        entry = {"flag": ENTRY_ADDED, "path": a["path"], "stat": a["stat"]}
         path_queue.append( entry )
 
     for r in removed_entries:
-        entry = {}
-        entry["flag"] = ENTRY_REMOVED
-        entry["path"] = r["path"]
-        entry["stat"] = r["stat"]
+        entry = {"flag": ENTRY_REMOVED, "path": r["path"], "stat": r["stat"]}
         path_queue.append( entry )
     _unlock()
 
@@ -153,9 +144,7 @@ def _resync( path ):
             # entry is a filename
             entry_path = last_dir.rstrip( "/" ) + "/" + entry
             st = fs.stat( entry_path )
-            e = {}
-            e["path"] = entry_path
-            e["stat"] = st
+            e = {"path": entry_path, "stat": st}
 
             if st.directory:
                 stack.append( entry_path )
@@ -289,7 +278,6 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
     file_path = gateway.path_join( "/", path )
     byte_offset = gateway.request_byte_offset( request )
     byte_len = gateway.request_byte_len( request )
-    buf = None
 
     if byte_offset is None:
         # this is a bug
@@ -310,9 +298,7 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
     except Exception, e:
         gateway.log_error( "Failed to read %s: %s" % ( file_path, e ) )
         # revoke
-        entry = {}
-        entry["path"] = file_path
-        entry["stat"] = None
+        entry = {"path": file_path, "stat": None}
         datasets_update_cb( [], [], [entry] )
         # resync
         _resync( os.path.dirname( file_path ) )
@@ -338,16 +324,12 @@ def refresh( request, driver_config, driver_secrets ):
     if not fs.exists( file_path ):
         # delete
         gateway.log_error( "No longer present: '%s'" % file_path )
-        entry = {}
-        entry["path"] = file_path
-        entry["stat"] = None
+        entry = {"path": file_path, "stat": None}
         datasets_update_cb([], [], [entry])
     else:
         # update
         gateway.log_error( "Still present: '%s'" % file_path )
-        entry = {}
-        entry["path"] = file_path
-        entry["stat"] = fs.stat( file_path )
+        entry = {"path": file_path, "stat": fs.stat( file_path )}
         datasets_update_cb([], [], [entry])
         # resync
         _resync( os.path.dirname( file_path ) )
