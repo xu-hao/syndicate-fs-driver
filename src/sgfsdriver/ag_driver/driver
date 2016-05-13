@@ -230,7 +230,7 @@ def next_dataset( driver_config, driver_secrets ):
             # no more data at this moment.
             # sleep for 1-sec
             time.sleep( 1.0 )
-            continue;
+            continue
 
         flag = next_stat["flag"]
         path = next_stat["path"]
@@ -272,7 +272,6 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
     """
 
     global fs
-    global storage_dir
 
     path = gateway.request_path( request )
     file_path = gateway.path_join( "/", path )

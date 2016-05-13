@@ -1,0 +1,22 @@
+{
+   "STORAGE_DIR":       "/iplant/home/iychoi/syndicate-RG-dataset",
+   "BLOCK_REPLICATION": false,
+   "EXEC_FMT":          "/usr/bin/env python -m syndicate.rg.gateway",
+   "DRIVER":            "syndicate.rg.drivers.fs",
+   "DRIVER_FS_PLUGIN": "datastore",
+   "DRIVER_FS_PLUGIN_CONFIG": 
+      {
+         "irods":
+            {
+               "host":  "irods-2.iplantcollaborative.org",
+               "port":  1247,
+               "zone":  "iplant"
+            },
+         "bms":
+            {
+               "host":  "irods-2.iplantcollaborative.org",
+               "port":  31333,
+               "vhost": "/irods/useraccess"
+            }
+      }                     
+}

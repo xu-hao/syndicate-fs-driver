@@ -35,10 +35,12 @@ from sgfsdriver.lib.pluginloader import pluginloader
 
 storage_dir = None
 fs = None
+block_replication = True
 
 def _initFS( driver_config, driver_secrets ):
     global fs
     global storage_dir
+    global block_replication
 
     if not driver_config.has_key( 'DRIVER_FS_PLUGIN' ):
         gateway.log_error( "No DRIVER_FS_PLUGIN defined" )
@@ -48,7 +50,7 @@ def _initFS( driver_config, driver_secrets ):
         gateway.log_error( "No DRIVER_FS_PLUGIN_CONFIG defined" )
         return False
 
-    if not driver_config.has_key('STORAGE_DIR'):
+    if not driver_config.has_key( 'STORAGE_DIR' ):
         gateway.log_error( "No STORAGE_DIR defined" )
         return False
 
@@ -65,6 +67,9 @@ def _initFS( driver_config, driver_secrets ):
 
     plugin_config["secrets"] = driver_secrets
     plugin_config["work_root"] = storage_dir
+
+    if driver_config.has_key( 'BLOCK_REPLICATION' ):
+        block_replication = bool(driver_config['BLOCK_REPLICATION'])
 
     try:
         loader = pluginloader()
@@ -84,6 +89,7 @@ def _initFS( driver_config, driver_secrets ):
 
 def _shutdownFS():
     global fs
+
     if fs:
         try:
             fs.close()
@@ -91,9 +97,9 @@ def _shutdownFS():
             pass
     fs = None
 
-def _prepareStorageDir( chunk_path ):
+def _prepareStorageDir( path ):
     """
-    Generate the directories on the path to a given chunk.
+    Generate the directories on the path
     Return 0 on success.
     Return -errno on failure.
     """
@@ -109,72 +115,189 @@ def _prepareStorageDir( chunk_path ):
         gateway.log_error( "Not a directory: %s" % storage_dir )
         return -errno.ENOTDIR
 
-    chunk_parent_path = os.path.dirname( chunk_path )
+    parent_path = os.path.dirname( path )
 
-    if not fs.exists( chunk_parent_path ):
-        fs.make_dirs( chunk_parent_path )
+    if not fs.exists( parent_path ):
+        fs.make_dirs( parent_path )
 
     return 0
 
-def read_chunk( chunk_request, outfile, config, secrets ):
-    if not _initFS( config, secrets ):
-        gateway.log_error("Unable to init filesystem")
+def _getChunkPresenceMapFile( path ):
+    presence_map_file = os.path.dirname(path) + "/." + os.path.basename(path)
+    return presence_map_file
+
+def _getChunkPresence( path, chunk_id ):
+    global fs
+    global storage_dir
+
+    presence_map_file = _getChunkPresenceMapFile( path )
+
+    if not fs.exists( presence_map_file ):
+        return False
+    else:
+        buf = fs.read( presence_map_file, 0, sys.maxint )
+        map_data = json.loads( buf )
+        bitmap = map_data["bitmap"]
+        if len( bitmap ) > chunk_id:
+            return bool( bitmap[chunk_id] )
+        else:
+            return False
+
+def _setChunkPresence( path, chunk_id, presence ):
+    global fs
+    global storage_dir
+
+    presence_map_file = _getChunkPresenceMapFile( path )
+
+    if fs.exists( presence_map_file ):
+        read_buf = fs.read( presence_map_file, 0, sys.maxint )
+        map_data = json.loads( read_buf )
+        bitmap = map_data["bitmap"]
+    else:
+        bitmap = []
+
+    if len( bitmap ) > chunk_id:
+        bitmap[chunk_id] = bool( presence )
+    else:
+        missing = chunk_id - len( bitmap )
+        for i in range( 0, missing ):
+            bitmap.append( False )
+        bitmap.append( presence )
+
+    if not presence:
+        # deletion of a chunk
+        delete = False
+        for bit in bitmap:
+            if not bool(bit):
+                delete = True
+
+        if delete:
+            fs.unlink( presence_map_file )
+            return True
+        else:
+            write_buf = json.dumps( bitmap )
+            fs.write( presence_map_file, 0, write_buf )
+            return False
+    else:
+        write_buf = json.dumps( bitmap )
+        fs.write( presence_map_file, 0, write_buf )
+        return False
+
+def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
+    """
+        Read a chunk of data.
+        @chunk_request is a DriverRequest
+        @outfile is a file to return the data read.
+        @driver_config is a dict containing the driver's config
+        @driver_secrets is a dict containing the driver's unencrypted secrets
+    """
+
+    global fs
+    global block_replication
+
+    if not _initFS( driver_config, driver_secrets) :
+        gateway.log_error( "Unable to init filesystem" )
         return -errno.EIO
 
-    chunk_path = gateway.request_to_storage_path( chunk_request )
-    rc = _prepareStorageDir( chunk_path )
+    if block_replication:
+        file_path = gateway.request_to_storage_path( chunk_request )
+        byte_offset = 0
+        byte_len = chunk_request.block_size
+    else:
+        path = gateway.request_path( chunk_request )
+        file_path = gateway.path_join( "/", path )
+        byte_offset = gateway.request_byte_offset( chunk_request )
+        byte_len = gateway.request_byte_len( chunk_request )
+
+    rc = _prepareStorageDir( file_path )
     if rc != 0:
-        gateway.log_error("WARN: could not make or load storage directory for '%s'" % chunk_path)
+        gateway.log_error( "WARN: could not make or load storage directory for '%s'" % file_path )
         return rc
 
-    if not fs.exists( chunk_path ):
-        gateway.log_error("WARN: '%s' does not exist" % chunk_path)
+    if not fs.exists( file_path ):
+        gateway.log_error( "WARN: '%s' does not exist" % file_path )
         return -errno.ENOENT
 
+    if not block_replication:
+        if not _getChunkPresence( file_path, chunk_request.block_id ):
+            gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
+            return -errno.ENOENT
+
     try:
-        outfile.write( fs.read( chunk_path, 0, sys.maxint ) )
+        outfile.write( fs.read( file_path, byte_offset, byte_len ) )
     except Exception:
-        gateway.log_error(traceback.format_exc())
+        gateway.log_error( traceback.format_exc() )
         return -errno.EIO
     return 0
 
-def write_chunk( chunk_request, chunk_buf, config, secrets ):
-    if not _initFS( config, secrets ):
-        gateway.log_error("Unable to init filesystem")
+def write_chunk( chunk_request, chunk_buf, driver_config, driver_secrets ):
+    global fs
+    global block_replication
+
+    if not _initFS( driver_config, driver_secrets ):
+        gateway.log_error( "Unable to init filesystem" )
         return -errno.EIO
 
-    chunk_path = gateway.request_to_storage_path( chunk_request )
-    rc = _prepareStorageDir( chunk_path )
+    if block_replication:
+        file_path = gateway.request_to_storage_path( chunk_request )
+        byte_offset = 0
+    else:
+        path = gateway.request_path( chunk_request )
+        file_path = gateway.path_join( "/", path )
+        byte_offset = gateway.request_byte_offset( chunk_request )
+
+    rc = _prepareStorageDir( file_path )
     if rc != 0:
-        gateway.log_error("WARN: could not make or load storage directory for '%s'" % chunk_path)
+        gateway.log_error( "WARN: could not make or load storage directory for '%s'" % file_path )
         return rc
 
     try:
-        fs.write( chunk_path, chunk_buf )
+        fs.write( file_path, byte_offset, chunk_buf )
     except Exception:
-        gateway.log_error(traceback.format_exc())
+        gateway.log_error( traceback.format_exc() )
         return -errno.EIO
+
+    if not block_replication:
+        _setChunkPresence( file_path, chunk_request.block_id, True )
+
     return 0
 
+def delete_chunk( chunk_request, driver_config, driver_secrets ):
+    global fs
+    global block_replication
 
-def delete_chunk( chunk_request, config, secrets ):
-    if not _initFS( config, secrets ):
-        gateway.log_error("Unable to init filesystem")
+    if not _initFS( driver_config, driver_secrets ):
+        gateway.log_error( "Unable to init filesystem" )
         return -errno.EIO
 
-    chunk_path = gateway.request_to_storage_path( chunk_request )
-    rc = _prepareStorageDir( chunk_path )
+    if block_replication:
+        file_path = gateway.request_to_storage_path( chunk_request )
+    else:
+        path = gateway.request_path( chunk_request )
+        file_path = gateway.path_join( "/", path )
+
+    rc = _prepareStorageDir( file_path )
     if rc != 0:
-        gateway.log_error("WARN: could not make or load storage directory for '%s'" % chunk_path )
+        gateway.log_error( "WARN: could not make or load storage directory for '%s'" % file_path )
         return rc
 
-    if not fs.exists( chunk_path ):
-        gateway.log_error("WARN: '%s' does not exist" % chunk_path)
+    if not fs.exists( file_path ):
+        gateway.log_error( "WARN: '%s' does not exist" % file_path )
         return 0
 
-    try:
-        fs.unlink( chunk_path )
-    except Exception:
-        gateway.log_error(traceback.format_exc())
-        return -errno.EIO
+    if block_replication:
+        try:
+            fs.unlink( file_path )
+        except Exception:
+            gateway.log_error( traceback.format_exc() )
+            return -errno.EIO
+    else:
+        delete = _setChunkPresence( file_path, chunk_request.block_id, False )
+        if delete:
+            try:
+                fs.unlink(file_path)
+            except Exception:
+                gateway.log_error(traceback.format_exc())
+                return -errno.EIO
+
     return 0
