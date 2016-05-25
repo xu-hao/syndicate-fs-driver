@@ -17,7 +17,7 @@
 """
 
 """
-Filesystem driver.
+Filesystem AG driver.
 Serves files on a remote system through generic fs plugin.
 """
 
@@ -37,14 +37,39 @@ storage_dir = None
 fs = None
 lock = None
 
-# will store a queue of ("put"|"delete", path)
-path_queue = []
-
-ENTRY_UPDATED = 0
-ENTRY_ADDED = 1
-ENTRY_REMOVED = 2
+# will store events to be processed
+event_queue = []
 
 DEFAULT_WRITE_TTL = 1000 * 60 * 5 # 5mins
+
+"""
+AG update event
+"""
+class ag_update_event(object):
+    ENTRY_UPDATED = 0
+    ENTRY_ADDED = 1
+    ENTRY_REMOVED = 2
+
+    def __init__(self, flag=None,
+                       path=None,
+                       stat=None):
+        self.flag = flag
+        self.path = path
+        self.stat = stat
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        rep_f = "UPDATE"
+        if self.flag == self.ENTRY_UPDATED:
+            rep_f = "UPDATE"
+        elif self.flag == self.ENTRY_ADDED:
+            rep_f = "ADD"
+        elif self.flag == self.ENTRY_REMOVED:
+            rep_f = "REMOVE"
+
+        return "<ag_update_event %s %s %s>" % (rep_f, self.path, self.stat)
 
 def _initFS( driver_config, driver_secrets, role ):
     global fs
@@ -107,21 +132,21 @@ def _shutdownFS():
     fs = None
 
 def datasets_update_cb( updated_entries, added_entries, removed_entries ):
-    global path_queue
+    global event_queue
     global lock
 
     _lock()
     for u in updated_entries:
-        entry = {"flag": ENTRY_UPDATED, "path": u["path"], "stat": u["stat"]}
-        path_queue.append( entry )
+        entry = ag_update_event(ag_update_event.ENTRY_UPDATED, u.path, u.stat)
+        event_queue.append(entry)
 
     for a in added_entries:
-        entry = {"flag": ENTRY_ADDED, "path": a["path"], "stat": a["stat"]}
-        path_queue.append( entry )
+        entry = ag_update_event(ag_update_event.ENTRY_ADDED, a.path, a.stat)
+        event_queue.append(entry)
 
     for r in removed_entries:
-        entry = {"flag": ENTRY_REMOVED, "path": r["path"], "stat": r["stat"]}
-        path_queue.append( entry )
+        entry = ag_update_event(ag_update_event.ENTRY_REMOVED, r.path, r.stat)
+        event_queue.append(entry)
     _unlock()
 
 def _lock():
@@ -144,7 +169,7 @@ def _resync( path ):
             # entry is a filename
             entry_path = last_dir.rstrip( "/" ) + "/" + entry
             st = fs.stat( entry_path )
-            e = {"path": entry_path, "stat": st}
+            e = abstractfs.afsevent( entry_path, st )
 
             if st.directory:
                 stack.append( entry_path )
@@ -171,8 +196,6 @@ def driver_init( driver_config, driver_secrets ):
         role = abstractfs.afsrole.READ
     elif rolestr == "crawl":
         role = abstractfs.afsrole.DISCOVER
-    elif rolestr == "refresh":
-        role = abstractfs.afsrole.READ
     else:
         gateway.log_error( "Unknown role: %s" % rolestr )
         return False
@@ -182,11 +205,11 @@ def driver_init( driver_config, driver_secrets ):
         return False
 
     if not fs.exists( "/" ):
-        gateway.log_error( "No such file or directory: %s" % dataset_dir )
+        gateway.log_error( "No such file or directory: %s" % storage_dir )
         return False 
 
     if not fs.is_dir( "/" ):
-        gateway.log_error( "Not a directory: %s" % dataset_dir )
+        gateway.log_error( "Not a directory: %s" % storage_dir )
         return False
 
     if role == abstractfs.afsrole.DISCOVER:
@@ -213,39 +236,35 @@ def next_dataset( driver_config, driver_secrets ):
     Return False if not.
     """
 
-    global path_queue
+    global event_queue
 
-    next_stat = None
+    next_event = None
 
     # find the next file or directory 
     while True:
-        next_stat = None
+        next_event = None
         _lock()
-        if len(path_queue) > 0:
-            next_stat = path_queue[0]
-            path_queue.pop( 0 )
+        if len(event_queue) > 0:
+            next_event = event_queue[0]
+            event_queue.pop(0)
         _unlock()
 
-        if next_stat is None:
+        if next_event is None:
             # no more data at this moment.
             # sleep for 1-sec
             time.sleep( 1.0 )
             continue
 
-        flag = next_stat["flag"]
-        path = next_stat["path"]
-        stat = next_stat["stat"]
-
         cmd = None
 
-        if flag == ENTRY_REMOVED:
-            # in this case, we do not know removed one was a file or a directory
-            cmd = gateway.make_metadata_command( "delete", "directory", 0555, None, path, write_ttl=DEFAULT_WRITE_TTL )
-        elif flag in [ENTRY_UPDATED, ENTRY_ADDED]:
-            if stat and not stat.directory:
-                cmd = gateway.make_metadata_command( "put", "file", 0555, stat.size, path, write_ttl=DEFAULT_WRITE_TTL )
+        if next_event.flag == ag_update_event.ENTRY_REMOVED:
+            # TODO: in this case, we do not know removed one was a file or a directory
+            cmd = gateway.make_metadata_command( "delete", "directory", 0555, None, next_event.path, write_ttl=DEFAULT_WRITE_TTL )
+        elif next_event.flag in [ag_update_event.ENTRY_UPDATED, ag_update_event.ENTRY_ADDED]:
+            if next_event.stat and not next_event.stat.directory:
+                cmd = gateway.make_metadata_command( "put", "file", 0555, next_event.stat.size, next_event.path, write_ttl=DEFAULT_WRITE_TTL )
             else:
-                cmd = gateway.make_metadata_command( "put", "directory", 0555, None, path, write_ttl=DEFAULT_WRITE_TTL )
+                cmd = gateway.make_metadata_command( "put", "directory", 0555, None, next_event.path, write_ttl=DEFAULT_WRITE_TTL )
 
         if cmd is not None:
             # send the command to the AG and get back the result
@@ -261,6 +280,36 @@ def next_dataset( driver_config, driver_secrets ):
             continue
 
     return False
+
+
+def refresh( request, driver_config, driver_secrets ):
+    """
+    Request to refresh a particular path.
+    Verify that it still exists, and if so,
+    queue it for republishing.
+    """
+
+    global fs
+
+    path = gateway.request_path( request )
+    file_path = gateway.path_join( "/", path )
+
+    fs.clear_cache( file_path )
+    if not fs.exists( file_path ):
+        # delete
+        gateway.log_error( "No longer present: '%s'" % file_path )
+        entry = abstractfs.afsevent( file_path, None )
+        datasets_update_cb([], [], [entry])
+    else:
+        # update
+        gateway.log_error( "Still present: '%s'" % file_path )
+        entry = abstractfs.afsevent( file_path, fs.stat( file_path ) )
+        datasets_update_cb([], [], [entry])
+        # resync
+        _resync( os.path.dirname( file_path ) )
+
+    return 0
+
 
 def read( request, chunk_fd, driver_config, driver_secrets ):
     """
@@ -296,42 +345,9 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
         buf = fs.read( file_path, byte_offset, byte_len )
     except Exception, e:
         gateway.log_error( "Failed to read %s: %s" % ( file_path, e ) )
-        # revoke
-        entry = {"path": file_path, "stat": None}
-        datasets_update_cb( [], [], [entry] )
-        # resync
-        _resync( os.path.dirname( file_path ) )
         return -errno.EREMOTEIO
 
     # send it off
     chunk_fd.write( buf )
-    return 0 
-
-def refresh( request, driver_config, driver_secrets ):
-    """
-    Request to refresh a particular path.
-    Verify that it still exists, and if so, 
-    queue it for republishing.
-    """
-
-    global fs
-
-    path = gateway.request_path( request )
-    file_path = gateway.path_join( "/", path )
-
-    fs.clear_cache( file_path )
-    if not fs.exists( file_path ):
-        # delete
-        gateway.log_error( "No longer present: '%s'" % file_path )
-        entry = {"path": file_path, "stat": None}
-        datasets_update_cb([], [], [entry])
-    else:
-        # update
-        gateway.log_error( "Still present: '%s'" % file_path )
-        entry = {"path": file_path, "stat": fs.stat( file_path )}
-        datasets_update_cb([], [], [entry])
-        # resync
-        _resync( os.path.dirname( file_path ) )
-
     return 0
 

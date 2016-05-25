@@ -233,12 +233,19 @@ class irods_client(object):
         logger.info("read: returning the buf(" + buf + ")")
         return buf
 
-    def write(self, path, buf):
+    def write(self, path, offset, buf):
         logger.info("write : " + path)
         try:
             logger.info("write: creating a file " + path)
             obj = self.session.data_objects.create(path)
             with obj.open('w') as f:
+                if offset != 0:
+                    logger.info("write: seeking at " + str(offset))
+                    new_offset = f.seek(offset)
+                    if new_offset != offset:
+                        logger.error("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+                        raise Exception("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+
                 logger.info("write: writing buffer " + len(buf))
                 f.write(buf)
                 logger.info("write: writing done")
@@ -249,7 +256,7 @@ class irods_client(object):
             raise e
 
         # invalidate stat cache
-        self.clear_stat_cache(os.path.dirname(path))
+        self.clear_stat_cache(path)
 
     def unlink(self, path):
         logger.info("unlink : " + path)
@@ -264,7 +271,70 @@ class irods_client(object):
             raise e
 
         # invalidate stat cache
-        self.clear_stat_cache(os.path.dirname(path))
+        self.clear_stat_cache(path)
+
+    def rename(self, path1, path2):
+        logger.info("rename : " + path1 + " -> " + path2)
+        try:
+            logger.info("rename: renaming a file " + path1 + " to " + path2)
+            self.session.data_objects.move(path1, path2)
+            logger.info("rename: renaming done")
+
+        except Exception, e:
+            logger.error("rename: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        # invalidate stat cache
+        self.clear_stat_cache(path1)
+        self.clear_stat_cache(path2)
+
+    def set_xattr(self, path, key, value):
+        logger.info("set_xattr : " + key + " - " + value)
+        try:
+            logger.info("set_xattr: set extended attribute to a file " + path + " " + key + "=" + value)
+            obj = self.session.data_objects.get(path)
+            obj.metadata.add(key, value)
+            logger.info("set_xattr: done")
+
+        except Exception, e:
+            logger.error("set_xattr: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+    def get_xattr(self, path, key):
+        logger.info("get_xattr : " + key)
+        value = None
+        try:
+            logger.info("get_xattr: get extended attribute from a file " + path + " " + key)
+            obj = self.session.data_objects.get(path)
+            meta = obj.metadata.get_one(key)
+            if meta:
+                value = meta.value
+            logger.info("get_xattr: done")
+
+        except Exception, e:
+            logger.error("get_xattr: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        return value
+
+    def list_xattr(self, path):
+        logger.info("list_xattr : " + key)
+        keys = None
+        try:
+            logger.info("list_xattr: get extended attributes from a file " + path)
+            obj = self.session.data_objects.get(path)
+            keys = obj.metadata.keys()
+            logger.info("list_xattr: done")
+
+        except Exception, e:
+            logger.error("list_xattr: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        return keys
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def download(self, path, to):

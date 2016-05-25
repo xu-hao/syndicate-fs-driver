@@ -25,8 +25,6 @@ import traceback
 import sys
 import os
 import errno
-import time
-import threading
 import json
 import syndicate.util.gateway as gateway
 import sgfsdriver.lib.abstractfs as abstractfs
@@ -36,6 +34,319 @@ from sgfsdriver.lib.pluginloader import pluginloader
 storage_dir = None
 fs = None
 block_replication = True
+
+"""
+RG metadata
+"""
+class rg_metadata_file(object):
+    def __init__(self,
+                 path=None,
+                 chunks=[],
+                 chunk_size=0,
+                 version=0):
+        self.path = path
+        self.chunks = chunks
+        self.chunk_size = chunk_size
+        self.version = version
+
+    @classmethod
+    def getMetaFilepath(cls, path, version=0):
+        # as a hidden file
+        meta_filepath = "%s/.%s.%d.meta" % (os.path.dirname(path), os.path.basename(path), version)
+        return meta_filepath
+
+    def isChunkPresent(self, chunk_id):
+        if self.chunks:
+            if len(self.chunks) > chunk_id:
+                return bool(self.chunks[chunk_id])
+            else:
+                return False
+        return False
+
+    def setChunkPresent(self, chunk_id, presence=True):
+        if not self.chunks:
+            self.chunks = []
+
+        if len(self.chunks) > chunk_id:
+            self.chunks[chunk_id] = presence
+        else:
+            missing = chunk_id - len(self.chunks)
+            for i in range(0, missing):
+                self.chunks.append(False)
+            self.chunks.append(presence)
+
+    def countLiveChunks(self):
+        live = 0
+        if self.chunks:
+            for chunk in self.chunks:
+                if chunk:
+                    live += 1
+        return live
+
+    def getLastLiveChunkPos(self):
+        livePos = -1
+        pos = 0
+        if self.chunks:
+            for chunk in self.chunks:
+                if chunk:
+                    livePos = pos
+        return livePos
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<rg_metadata_file %s %s %d %d>" % (self.path, str(self.chunks), self.chunk_size, self.version)
+
+    def toJson(self):
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def fromJson(cls, json_str):
+        json_dict = json.loads(json_str)
+        return cls(**json_dict)
+
+
+"""
+RG metadata directory
+"""
+class rg_metadata_dir_entry(object):
+    def __init__(self,
+                 metapath=None,
+                 version=0):
+        self.metapath = metapath
+        self.version = version
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<rg_metadata_dir_entry %s %d>" % (self.metapath, self.version)
+
+
+class rg_metadata_dir(object):
+    def __init__(self,
+                 entry_map={}):
+        self.entry_map = entry_map
+
+    @classmethod
+    def getMetaDirFilepath(cls, storage_dir):
+        # as a hidden file
+        meta_dir_filepath = "/" + storage_dir.strip("/") + "/.rg_meta_dir.json"
+        return meta_dir_filepath
+
+    def getEntries(self, path):
+        if path in self.entry_map:
+            return self.entry_map[path]
+        return None
+
+    def getEntry(self, path, version=0):
+        if path in self.entry_map:
+            entries = self.entry_map[path]
+            if version == 0:
+                version_latest = 0
+                entry_latest = None
+                for entry in entries:
+                    if entry.version > version_latest:
+                        entry_latest = entry
+                        version_latest = entry.version
+                return entry_latest
+            else:
+                for entry in entries:
+                    if entry.version == version:
+                        return entry
+        return None
+
+    def putEntry(self, path, metapath=None, version=0):
+        if metapath:
+            new_entry = rg_metadata_dir_entry(metapath, version)
+        else:
+            new_entry = rg_metadata_dir_entry(rg_metadata_file.getMetaFilepath(path), version)
+
+        if path in self.entry_map:
+            entries = self.entry_map[path]
+            entries.append(new_entry)
+        else:
+            self.entry_map[path] = [new_entry]
+
+    def deleteEntry(self, path, version=0):
+        if path in self.entry_map:
+            entries = self.entry_map[path]
+            if version == 0:
+                version_latest = 0
+                position_latest = 0
+                for i in range(0, len(entries)):
+                    entry = entries[i]
+                    if entry.version > version_latest:
+                        position_latest = i
+                        version_latest = entry.version
+                entries.pop(position_latest)
+            else:
+                position = -1
+                for i in range(0, len(entries)):
+                    entry = entries[i]
+                    if entry.version == version:
+                        position = i
+                        break
+                entries.pop(position)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<rg_metadata_dir %s %s>" % (self.fs, str(self.entry_map))
+
+    def toJson(self):
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def fromJson(cls, json_str):
+        json_dict = json.loads(json_str)
+        return cls(**json_dict)
+
+"""
+RG metadata database
+"""
+class rg_meta_database(object):
+    def __init__(self,
+                 fs=None,
+                 directory_filepath=None,
+                 chunk_size=0):
+        self.fs = fs
+        self.directory_filepath = directory_filepath
+        self.chunk_size = chunk_size
+        # read meta directory
+        self.meta_directory = self._getMetaDirectory()
+
+    def _getMetaDirectory(self):
+        if not self.meta_directory:
+            if self.fs.exists(self.directory_filepath):
+                buf = fs.read(self.directory_filepath, 0, sys.maxint)
+                self.meta_directory = rg_metadata_dir.fromJson(str(buf))
+            else:
+                # create a one
+                self.meta_directory = rg_metadata_dir()
+        return self.meta_directory
+
+    def _save(self):
+        if self.meta_directory:
+            write_buf = self.meta_directory.toJson()
+            if self.fs.exists(self.directory_filepath):
+                self.fs.unlink()
+            self.fs.write(self.directory_filepath, 0, write_buf)
+
+    def _getMetaFile(self, path, version=0):
+        entry = self.meta_directory.getEntry(path, version)
+        if entry:
+            if self.fs.exists(entry.metapath):
+                buf = fs.read(entry.metapath, 0, sys.maxint)
+                return rg_metadata_file.fromJson(str(buf))
+        return None
+
+    def _getMetaFileFromDataFile(self, path, datafilepath):
+        entries = self.meta_directory.getEntries(path)
+        if entries:
+            for entry in entries:
+                if self.fs.exists(entry.metapath):
+                    buf = fs.read(entry.metapath, 0, sys.maxint)
+                    metafile = rg_metadata_file.fromJson(str(buf))
+                    if metafile.path == datafilepath:
+                        return metafile
+        return None
+
+    def _putMetaFile(self, path, metafile):
+        metadata_file_path = rg_metadata_file.getMetaFilepath(path, metafile.version)
+
+        # create a metafile
+        write_buf = metafile.toJson()
+        if self.fs.exists(metadata_file_path):
+            self.fs.unlink()
+        self.fs.write(metadata_file_path, 0, write_buf)
+
+        # register to a directory
+        self.meta_directory.putEntry(path, metadata_file_path, metafile.version)
+        self._save()
+
+    def _updateMetaFile(self, path, metafile):
+        metadata_file_path = rg_metadata_file.getMetaFilepath(path, metafile.version)
+
+        # create a metafile
+        write_buf = metafile.toJson()
+        if self.fs.exists(metadata_file_path):
+            self.fs.unlink()
+        self.fs.write(metadata_file_path, 0, write_buf)
+
+    def _deleteMetaFile(self, path, version=0):
+        entry = self.meta_directory.getEntry(path, version)
+        if entry:
+            if self.fs.exists(entry.metapath):
+                self.fs.unlink(entry.metapath)
+                self.meta_directory.deleteEntry(path, version)
+                self._save()
+
+    def _makeDataFilepath(self, path, version=0):
+        return "%s.%d" % (path, version)
+
+    def _latestVersion(self, path):
+        entry = self.meta_directory.getEntry(path, 0)
+        if entry:
+            return entry.version
+        else:
+            return 0
+
+    def writeChunk(self, path, chunk_id, buf, version=0):
+        metafile = self._getMetaFile(path, version)
+        new_metafile = False
+        if not metafile:
+            metafile = rg_metadata_file(self._makeDataFilepath(path, version), [], self.chunk_size, version)
+            new_metafile = True
+
+        # write to a file
+        self.fs.write(metafile.path, chunk_id * self.chunk_size, buf)
+        metafile.setChunkPresent(chunk_id, True)
+
+        if new_metafile:
+            self._putMetaFile(path, metafile)
+        else:
+            self._updateMetaFile(path, metafile)
+
+    def completeWriteFile(self, path, version=0):
+        if self._latestVersion(path) == version:
+            # rename previous latest
+            if self.fs.exists(path):
+                p_metafile = self._getMetaFileFromDataFile(path, path)
+                p_metafile.path = self._makeDataFilepath(path, p_metafile.version)
+                self.fs.rename(path, p_metafile.path)
+                self._updateMetaFile(path, p_metafile)
+
+            # rename
+            metafile = self._getMetaFile(path, version)
+            metafile.path = path
+            self.fs.rename(metafile.path, path)
+            self._updateMetaFile(path, metafile)
+
+    def readChunk(self, path, chunk_id, version=0):
+        metafile = self._getMetaFile(path, version)
+        if metafile:
+            if metafile.isChunkPresent(chunk_id):
+                return self.fs.read(metafile.path, chunk_id * self.chunk_size, self.chunk_size)
+        return None
+
+    def deleteChunk(self, path, chunk_id, version=0):
+        metafile = self._getMetaFile(path, version)
+        if metafile:
+            metafile.setChunkPresent(chunk_id, False)
+            if metafile.countLiveChunks() == 0:
+                self.fs.unlink(metafile.path)
+                self._deleteMetaFile(path, metafile.version)
+            else:
+                self._updateMetaFile(path, metafile)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<rg_meta_database>"
 
 def _initFS( driver_config, driver_secrets ):
     global fs
@@ -121,67 +432,6 @@ def _prepareStorageDir( path ):
         fs.make_dirs( parent_path )
 
     return 0
-
-def _getChunkPresenceMapFile( path ):
-    presence_map_file = os.path.dirname(path) + "/." + os.path.basename(path)
-    return presence_map_file
-
-def _getChunkPresence( path, chunk_id ):
-    global fs
-    global storage_dir
-
-    presence_map_file = _getChunkPresenceMapFile( path )
-
-    if not fs.exists( presence_map_file ):
-        return False
-    else:
-        buf = fs.read( presence_map_file, 0, sys.maxint )
-        map_data = json.loads( buf )
-        bitmap = map_data["bitmap"]
-        if len( bitmap ) > chunk_id:
-            return bool( bitmap[chunk_id] )
-        else:
-            return False
-
-def _setChunkPresence( path, chunk_id, presence ):
-    global fs
-    global storage_dir
-
-    presence_map_file = _getChunkPresenceMapFile( path )
-
-    if fs.exists( presence_map_file ):
-        read_buf = fs.read( presence_map_file, 0, sys.maxint )
-        map_data = json.loads( read_buf )
-        bitmap = map_data["bitmap"]
-    else:
-        bitmap = []
-
-    if len( bitmap ) > chunk_id:
-        bitmap[chunk_id] = bool( presence )
-    else:
-        missing = chunk_id - len( bitmap )
-        for i in range( 0, missing ):
-            bitmap.append( False )
-        bitmap.append( presence )
-
-    if not presence:
-        # deletion of a chunk
-        delete = False
-        for bit in bitmap:
-            if not bool(bit):
-                delete = True
-
-        if delete:
-            fs.unlink( presence_map_file )
-            return True
-        else:
-            write_buf = json.dumps( bitmap )
-            fs.write( presence_map_file, 0, write_buf )
-            return False
-    else:
-        write_buf = json.dumps( bitmap )
-        fs.write( presence_map_file, 0, write_buf )
-        return False
 
 def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
     """

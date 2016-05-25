@@ -66,10 +66,25 @@ class afsstat(object):
         json_dict = json.loads(json_str)
         return cls(**json_dict)
 
+
+class afsevent(object):
+    def __init__(self,
+                 path=None,
+                 stat=None):
+        self.stat = stat
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<afsevent %s %s>" % (self.path, self.stat)
+
+
 class afsrole:
     DISCOVER = 1
     READ = 2
     WRITE = 3
+
 
 class afsbase(object):
     __metaclass__ = ABCMeta
@@ -123,12 +138,32 @@ class afsbase(object):
 
     # write bytes to given path with bytes
     @abstractmethod
-    def write(self, filepath, buf):
+    def write(self, filepath, offset, buf):
         pass
 
     # remove given file
     @abstractmethod
     def unlink(self, filepath):
+        pass
+
+    # rename given file
+    @abstractmethod
+    def rename(self, filepath1, filepath2):
+        pass
+
+    # set xattr
+    @abstractmethod
+    def set_xattr(self, filepath, key, value):
+        pass
+
+    # get xattr
+    @abstractmethod
+    def get_xattr(self, filepath, key):
+        pass
+
+    # list xattr
+    @abstractmethod
+    def list_xattr(self, filepath):
         pass
 
     # clear cache if exists

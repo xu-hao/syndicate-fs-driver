@@ -218,12 +218,12 @@ class plugin_impl(abstractfs.afsbase):
         self.clear_cache(driver_path)
         if operation == "remove":
             if self.notification_cb:
-                entry = {"path": driver_path, "stat": None}
+                entry = abstractfs.afsevent(driver_path, None)
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
                 st = self.stat(driver_path)
-                entry = {"path": driver_path, "stat": st}
+                entry = abstractfs.afsevent(driver_path, st)
                 if operation == "create":
                     self.notification_cb([], [entry], [])
                 elif operation == "modify":
@@ -318,11 +318,11 @@ class plugin_impl(abstractfs.afsbase):
             buf = self.irods.read(irods_path, offset, size)
             return buf
 
-    def write(self, filepath, buf):
+    def write(self, filepath, offset, buf):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
-            self.irods.write(irods_path, buf)
+            self.irods.write(irods_path, offset, buf)
 
     def clear_cache(self, path):
         with self._get_lock():
@@ -337,8 +337,33 @@ class plugin_impl(abstractfs.afsbase):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
-            if not self.exists(irods_path):
-                self.irods.unlink(irods_path)
+            self.irods.unlink(irods_path)
+
+    def rename(self, filepath1, filepath2):
+        with self._get_lock():
+            ascii_path1 = filepath1.encode('ascii', 'ignore')
+            ascii_path2 = filepath2.encode('ascii', 'ignore')
+            irods_path1 = self._make_irods_path(ascii_path1)
+            irods_path2 = self._make_irods_path(ascii_path2)
+            self.irods.rename(irods_path1, irods_path2)
+
+    def set_xattr(self, filepath, key, value):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            self.irods.setxattr(irods_path, key, value)
+
+    def get_xattr(self, filepath, key):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            return self.irods.getxattr(irods_path, key)
+
+    def list_xattr(self, filepath):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            localfs_path = self._make_irods_path(ascii_path)
+            return self.irods.listxattr(localfs_path)
 
     def plugin(self):
         return self.__class__

@@ -21,11 +21,13 @@ Local-filesystem Plugin
 """
 import os
 import sys
+import xattr
 import time
 import stat
 import logging
 import threading
 import pyinotify
+
 
 import sgfsdriver.lib.abstractfs as abstractfs
 
@@ -114,12 +116,12 @@ class plugin_impl(abstractfs.afsbase):
 
         if operation == "remove":
             if self.notification_cb:
-                entry = {"path": driver_path, "stat": None}
+                entry = abstractfs.afsevent(driver_path, None)
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
                 st = self.stat(driver_path)
-                entry = {"path": driver_path, "stat": st}
+                entry = abstractfs.afsevent(driver_path, st)
                 if operation == "create":
                     self.notification_cb([], [entry], [])
                 elif operation == "modify":
@@ -220,19 +222,45 @@ class plugin_impl(abstractfs.afsbase):
 
             return buf
 
-    def write(self, filepath, buf):
+    def write(self, filepath, offset, buf):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             with open(localfs_path, "w") as f:
+                f.seek(offset, 0)
                 f.write(buf)
 
     def unlink(self, filepath):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
-            if not os.path.exists(localfs_path):
-                os.unlink(localfs_path)
+            os.unlink(localfs_path)
+
+    def rename(self, filepath1, filepath2):
+        with self._get_lock():
+            ascii_path1 = filepath1.encode('ascii', 'ignore')
+            ascii_path2 = filepath2.encode('ascii', 'ignore')
+            localfs_path1 = self._make_localfs_path(ascii_path1)
+            localfs_path2 = self._make_localfs_path(ascii_path2)
+            os.rename(localfs_path1, localfs_path2)
+
+    def set_xattr(self, filepath, key, value):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            localfs_path = self._make_localfs_path(ascii_path)
+            xattr.setxattr(localfs_path, key, value)
+
+    def get_xattr(self, filepath, key):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            localfs_path = self._make_localfs_path(ascii_path)
+            return xattr.getxattr(localfs_path, key)
+
+    def list_xattr(self, filepath):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            localfs_path = self._make_localfs_path(ascii_path)
+            return xattr.listxattr(localfs_path)
 
     def clear_cache(self, path):
         pass
