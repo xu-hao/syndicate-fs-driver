@@ -172,12 +172,12 @@ class plugin_impl(abstractfs.afsbase):
         irods_host = irods_host.encode('ascii','ignore')
         irods_zone = self.irods_config["zone"]
         irods_zone = irods_zone.encode('ascii','ignore')
-        
+
         logger.info("__init__: initializing irods_client")
-        self.irods = irods_client.irods_client(host=irods_host, 
-                                               port=self.irods_config["port"], 
-                                               user=user, 
-                                               password=password, 
+        self.irods = irods_client.irods_client(host=irods_host,
+                                               port=self.irods_config["port"],
+                                               user=user,
+                                               password=password,
                                                zone=irods_zone)
 
         if self.role == abstractfs.afsrole.DISCOVER:
@@ -185,13 +185,13 @@ class plugin_impl(abstractfs.afsbase):
             logger.info("__init__: initializing bms_client")
             path_filter = work_root.rstrip("/") + "/*"
 
-            acceptor = bms_client.bms_message_acceptor("path", 
+            acceptor = bms_client.bms_message_acceptor("path",
                                                        path_filter)
             logger.info("__init__: path_filter = " + path_filter)
-            self.bms = bms_client.bms_client(host=self.bms_config["host"], 
-                                             port=self.bms_config["port"], 
-                                             user=user, 
-                                             password=password, 
+            self.bms = bms_client.bms_client(host=self.bms_config["host"],
+                                             port=self.bms_config["port"],
+                                             user=user,
+                                             password=password,
                                              vhost=self.bms_config["vhost"],
                                              acceptors=[acceptor])
 
@@ -231,17 +231,17 @@ class plugin_impl(abstractfs.afsbase):
 
     def _make_irods_path(self, path):
         if path.startswith(self.work_root):
-            return path
-        
-        if path.startswith("/"):
-            return self.work_root + path
+            return path.rstrip("/")
 
-        return self.work_root + "/" + path
+        if path.startswith("/"):
+            return self.work_root + path.rstrip("/")
+
+        return self.work_root + "/" + path.rstrip("/")
 
     def _make_driver_path(self, path):
         if path.startswith(self.work_root):
-            return path[len(self.work_root):]
-        return path
+            return path[len(self.work_root):].rstrip("/")
+        return path.rstrip("/")
 
     def connect(self):
         logger.info("connect: connecting to iRODS")
@@ -373,5 +373,3 @@ class plugin_impl(abstractfs.afsbase):
 
     def set_notification_cb(self, notification_cb):
         self.notification_cb = notification_cb
-
-

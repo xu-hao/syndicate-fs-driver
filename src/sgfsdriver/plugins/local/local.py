@@ -94,7 +94,7 @@ class plugin_impl(abstractfs.afsbase):
             # set inotify
             self.watch_manager = pyinotify.WatchManager()
             self.notify_handler = InotifyEventHandler(self)
-            self.notifier = pyinotify.ThreadedNotifier(self.watch_manager, 
+            self.notifier = pyinotify.ThreadedNotifier(self.watch_manager,
                                                        self.notify_handler)
 
         self.notification_cb = None
@@ -129,17 +129,17 @@ class plugin_impl(abstractfs.afsbase):
 
     def _make_localfs_path(self, path):
         if path.startswith(self.work_root):
-            return path
-        
-        if path.startswith("/"):
-            return self.work_root + path
+            return path.rstrip("/")
 
-        return self.work_root + "/" + path
+        if path.startswith("/"):
+            return self.work_root + path.rstrip("/")
+
+        return self.work_root + "/" + path.rstrip("/")
 
     def _make_driver_path(self, path):
         if path.startswith(self.work_root):
-            return path[len(self.work_root):]
-        return path
+            return path[len(self.work_root):].rstrip("/")
+        return path.rstrip("/")
 
     def connect(self):
         if self.role == abstractfs.afsrole.DISCOVER:
@@ -151,8 +151,8 @@ class plugin_impl(abstractfs.afsbase):
                 self.notifier.start()
 
                 mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
-                self.watch_directory = self.watch_manager.add_watch(self.work_root, 
-                                                                    mask, 
+                self.watch_directory = self.watch_manager.add_watch(self.work_root,
+                                                                    mask,
                                                                     rec=True,
                                                                     auto_add=True)
             except:
