@@ -7,13 +7,13 @@
       {
          "irods":
             {
-               "host":  "irods-2.iplantcollaborative.org",
+               "host":  "irods-2.cyverse.org",
                "port":  1247,
                "zone":  "iplant"
             },
          "bms":
             {
-               "host":  "irods-2.iplantcollaborative.org",
+               "host":  "irods-2.cyverse.org",
                "port":  31333,
                "vhost": "/irods/useraccess"
             }

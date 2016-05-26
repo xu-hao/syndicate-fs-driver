@@ -29,9 +29,9 @@ import time
 import threading
 import json
 import syndicate.util.gateway as gateway
-import sagfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.lib.abstractfs as abstractfs
 
-from sagfsdriver.lib.pluginloader import pluginloader
+from sgfsdriver.lib.pluginloader import pluginloader
 
 storage_dir = None
 fs = None
