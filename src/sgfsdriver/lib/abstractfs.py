@@ -26,9 +26,9 @@ from datetime import datetime
 Abstraction of filesystem insterface
 """
 class afsstat(object):
-    def __init__(self, directory=False, 
+    def __init__(self, directory=False,
                        path=None,
-                       name=None, 
+                       name=None,
                        size=0,
                        checksum=0,
                        create_time=0,
@@ -48,15 +48,15 @@ class afsstat(object):
         else:
             self.modify_time = modify_time
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
-    def __repr__(self): 
+    def __repr__(self):
         rep_d = "F"
         if self.directory:
             rep_d = "D"
 
-        return "<afsstat %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum) 
+        return "<afsstat %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum)
 
     def toJson(self):
         return json.dumps(self.__dict__)
@@ -71,6 +71,7 @@ class afsevent(object):
     def __init__(self,
                  path=None,
                  stat=None):
+        self.path = path
         self.stat = stat
 
     def __eq__(self, other):
@@ -175,7 +176,7 @@ class afsbase(object):
     @abstractmethod
     def plugin(self):
         pass
-    
+
     # return a role of plugin
     @abstractmethod
     def role(self):
@@ -184,4 +185,3 @@ class afsbase(object):
     @abstractmethod
     def set_notification_cb(self, notification_cb):
         pass
-
