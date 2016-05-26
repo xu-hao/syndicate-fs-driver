@@ -91,8 +91,8 @@ def _initFS( driver_config, driver_secrets, role ):
         gateway.log_error( "No DATASET_DIR defined" )
         return False
 
-    dataset_dir = driver_config['DATASET_DIR']
-    dataset_dir = "/" + dataset_dir.strip("/")
+    storage_dir = driver_config['DATASET_DIR']
+    storage_dir = "/" + storage_dir.strip("/")
 
     plugin = driver_config['DRIVER_FS_PLUGIN']
 
@@ -103,7 +103,7 @@ def _initFS( driver_config, driver_secrets, role ):
         plugin_config = json.loads( json_plugin_config )
 
     plugin_config["secrets"] = driver_secrets
-    plugin_config["work_root"] = dataset_dir
+    plugin_config["work_root"] = storage_dir
 
     try:
         loader = pluginloader()
@@ -206,7 +206,7 @@ def driver_init( driver_config, driver_secrets ):
 
     if not fs.exists( "/" ):
         gateway.log_error( "No such file or directory: %s" % storage_dir )
-        return False 
+        return False
 
     if not fs.is_dir( "/" ):
         gateway.log_error( "Not a directory: %s" % storage_dir )
@@ -224,7 +224,7 @@ def driver_shutdown():
     Do the one-time driver shutdown
     """
     _shutdownFS()
-    
+
 
 def next_dataset( driver_config, driver_secrets ):
     """
@@ -240,7 +240,7 @@ def next_dataset( driver_config, driver_secrets ):
 
     next_event = None
 
-    # find the next file or directory 
+    # find the next file or directory
     while True:
         next_event = None
         _lock()
@@ -275,7 +275,7 @@ def next_dataset( driver_config, driver_secrets ):
             # have more data
             return True
         else:
-            # try next path 
+            # try next path
             gateway.log_error( "unhandled changes - could not create the command" )
             continue
 
@@ -350,4 +350,3 @@ def read( request, chunk_fd, driver_config, driver_secrets ):
     # send it off
     chunk_fd.write( buf )
     return 0
-
