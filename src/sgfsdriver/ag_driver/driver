@@ -258,8 +258,7 @@ def next_dataset( driver_config, driver_secrets ):
         cmd = None
 
         if next_event.flag == ag_update_event.ENTRY_REMOVED:
-            # TODO: in this case, we do not know removed one was a file or a directory
-            cmd = gateway.make_metadata_command( "delete", "directory", 0555, None, next_event.path, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_delete_command( next_event.path )
         elif next_event.flag in [ag_update_event.ENTRY_UPDATED, ag_update_event.ENTRY_ADDED]:
             if next_event.stat and not next_event.stat.directory:
                 cmd = gateway.make_metadata_command( "put", "file", 0555, next_event.stat.size, next_event.path, write_ttl=DEFAULT_WRITE_TTL )
