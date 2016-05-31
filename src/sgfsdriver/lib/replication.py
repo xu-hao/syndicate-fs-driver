@@ -51,6 +51,12 @@ class undo_log_block(object):
         block_data = buf[16:]
         return undo_log_block(block_id, block_data, block_version)
 
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<undo_log_block %d %d>" % (self.block_id, self.block_data)
+
 
 class undo_log(object):
     UNDO_LOG_SUFFIX = ".ulog"
@@ -89,6 +95,12 @@ class undo_log(object):
             return True
         return False
 
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<undo_log %s %s>" % (self.data_path, self.log_path, self.log)
+
 class replica(object):
     REPLICA_INCOMPLETE_SUFFIX = ".part"
     REPLICA_BLOCK_VERSIONS_XATTR_KEY = "block_versions"
@@ -110,6 +122,12 @@ class replica(object):
 
     def _makeIncompletePath(self, path):
         return "%s%s" % (path, UNDO_LOG_SUFFIX)
+
+    def _makeDirs(self, path):
+        with self._getLock():
+            parent_path = os.path.dirname(path)
+            if not self.fs.exists(parent_path):
+                self.fs.make_dirs(parent_path)
 
     def isInTransaction(self):
         with self._getLock():
@@ -152,6 +170,8 @@ class replica(object):
 
     def replicateBlock(self, block_id, block_data, block_version):
         with self._getLock():
+            self._makeDirs()
+
             incomplete_path = self._makeIncompletePath(self.data_path)
             old_block_versions = []
 
@@ -197,6 +217,40 @@ class replica(object):
             else:
                 # if log exists, clear log
                 self.log.clearLog()
+
+    def readBlock(self, block_id, block_version):
+        with self._getLock():
+            if self.fs.exists(self.data_path):
+                versions = self._readBlockVersionsFromDataFile(self.data_path)
+                if block_id < len(versions):
+                    version = versions[block_id]
+                    if version == block_version:
+                        block_data = self.fs.read(self.data_path, block_id * self.block_size, self.block_size)
+                        return block_data
+            return None
+
+    def deleteBlock(self, block_id, block_version):
+        with self._getLock():
+            if self.fs.exists(self.data_path):
+                versions = self._readBlockVersionsFromDataFile(self.data_path)
+                if block_id < len(versions):
+                    version = versions[block_id]
+                    if version == block_version:
+                        # mark the block deleted
+                        versions[block_id] = 0
+                        all_blocks_deleted = True
+                        for v in versions:
+                            if v != 0:
+                                all_blocks_deleted = False
+                                break
+
+                        if all_blocks_deleted:
+                            self.fs.unlink(self.data_path)
+                        else:
+                            self._writeBlockVersionsToDataFile(self.data_path, versions)
+
+                        return True
+            return False
 
     def _readBlockFromDataFile(self, path, block_id):
         with self._getLock():
