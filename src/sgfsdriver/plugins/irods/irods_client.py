@@ -54,9 +54,9 @@ Timeout only works at a main thread.
 Interface class to iRODS
 """
 class irods_status(object):
-    def __init__(self, directory=False, 
+    def __init__(self, directory=False,
                        path=None,
-                       name=None, 
+                       name=None,
                        size=0,
                        checksum=0,
                        create_time=0,
@@ -71,29 +71,29 @@ class irods_status(object):
 
     @classmethod
     def fromCollection(cls, col):
-        return irods_status(directory=True, 
+        return irods_status(directory=True,
                             path=col.path,
                             name=col.name)
 
     @classmethod
     def fromDataObject(cls, obj):
-        return irods_status(directory=False, 
+        return irods_status(directory=False,
                             path=obj.path,
-                            name=obj.name, 
-                            size=obj.size, 
-                            checksum=obj.checksum, 
-                            create_time=obj.create_time, 
+                            name=obj.name,
+                            size=obj.size,
+                            checksum=obj.checksum,
+                            create_time=obj.create_time,
                             modify_time=obj.modify_time)
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
-    def __repr__(self): 
+    def __repr__(self):
         rep_d = "F"
         if self.directory:
             rep_d = "D"
 
-        return "<irods_status %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum) 
+        return "<irods_status %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum)
 
 class irods_client(object):
     def __init__(self, host=None,
@@ -113,10 +113,10 @@ class irods_client(object):
                                        max_age_seconds=METADATA_CACHE_TTL)
 
     def connect(self):
-        self.session = iRODSSession(host=self.host, 
-                                    port=self.port, 
-                                    user=self.user, 
-                                    password=self.password, 
+        self.session = iRODSSession(host=self.host,
+                                    port=self.port,
+                                    user=self.user,
+                                    password=self.password,
                                     zone=self.zone)
 
     def close(self):
@@ -294,6 +294,9 @@ class irods_client(object):
         try:
             logger.info("set_xattr: set extended attribute to a file " + path + " " + key + "=" + value)
             obj = self.session.data_objects.get(path)
+            keys = obj.metadata.keys()
+            if key in keys:
+                obj.metadata.remove(key)
             obj.metadata.add(key, value)
             logger.info("set_xattr: done")
 
@@ -355,4 +358,3 @@ class irods_client(object):
                 raise e
 
         return to
-
