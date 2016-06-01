@@ -52,6 +52,32 @@ class syndicate_util_gateway(ModuleType):
             "write_ttl": write_ttl
         }
 
+    @classmethod
+    def crawl(module, cmd):
+        print "> crawl"
+        print cmd
+        return 0 # success
+
+    @classmethod
+    def request_path(module, request):
+        return request.path
+
+    @classmethod
+    def request_to_storage_path(module, request):
+        return
+
+    @classmethod
+    def path_join(module, path1, path2):
+        return os.path.join(path1, path2)
+
+    @classmethod
+    def request_byte_offset(module, request):
+        return request.byte_offset
+
+    @classmethod
+    def request_byte_len(module, request):
+        return request.byte_len
+
 class syndicate_util(ModuleType):
     gateway = syndicate_util_gateway
 
@@ -69,11 +95,11 @@ def load_config_secrets(cs_dir):
     secret_data = None
     with open(cs_dir + "/secrets") as secret:
         secret_data = json.load(secret)
-    
+
     return config_data, secret_data
 
 def findDriver():
-    driver_path = os.path.abspath(src_root + "/sgfsdriver/driver/driver")
+    driver_path = os.path.abspath(src_root + "/sgfsdriver/rg_driver/driver")
     if os.path.exists(driver_path):
         return imp.load_source("driver",
                                driver_path)
@@ -96,7 +122,7 @@ def main():
         return
 
     cs_dir = sys.argv[1]
-    
+
     CONFIG, SECRETS = load_config_secrets(cs_dir)
     if CONFIG is None:
         print "cannot find config"
@@ -110,8 +136,17 @@ def main():
 
     driver = findDriver()
 
-    # do test
+    dinit = driver.driver_init(CONFIG, SECRETS)
+    if not dinit:
+        print("cannot init driver")
+        sys.exit(1)
+
+    """
+    TODO: test here
+    """
+
+    if dinit:
+        driver.driver_shutdown()
 
 if __name__ == "__main__":
     main()
-

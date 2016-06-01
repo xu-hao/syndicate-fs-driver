@@ -258,6 +258,26 @@ class irods_client(object):
         # invalidate stat cache
         self.clear_stat_cache(path)
 
+    def truncate(self, path, size):
+        logger.info("truncate : " + path)
+        try:
+            logger.info("truncate: getting a file " + path)
+            obj = self.session.data_objects.get(path)
+            with obj.open('w') as f:
+                if offset != 0:
+                    logger.info("truncate: truncating at " + str(size))
+                    f.truncate(size)
+
+                logger.info("truncate: truncating done")
+
+        except Exception, e:
+            logger.error("truncate: " + traceback.format_exc())
+            traceback.print_exc()
+            raise e
+
+        # invalidate stat cache
+        self.clear_stat_cache(path)
+
     def unlink(self, path):
         logger.info("unlink : " + path)
         try:

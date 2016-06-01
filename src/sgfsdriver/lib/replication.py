@@ -24,38 +24,38 @@ import struct
 
 import sgfsdriver.lib.abstractfs as abstractfs
 
-INCOMPLETE_FILE_SUFFIX = ".part"
-
 """
 undo-log class
 """
 class undo_log_block(object):
-    def __init__(self, block_id, block_data, block_version):
-        self.block_id = 0
-        self.block_data = None
-        self.block_version = 0
+    def __init__(self, block_id, block_data, block_version, block_size):
+        self.block_id = block_id
+        self.block_data = block_data
+        self.block_version = block_version
+        self.block_size = block_size
 
     def toBinary(self):
-        s = struct.Struct('=qq')
-        buf = bytearray(8 + 8 + len(self.block_data))
-        s.pack_into(buf, 0, self.block_id, self.block_version)
+        s = struct.Struct('=qqq')
+        buf = bytearray(8 + 8 + 8 + len(self.block_data))
+        s.pack_into(buf, 0, self.block_id, self.block_version, self.block_size)
         buf[:] = self.block_data
         return buf
 
     @classmethod
     def fromBinary(cls, buf):
-        s = struct.Struct('=qq')
+        s = struct.Struct('=qqq')
         tup = s.unpack_from(buf, 0)
         block_id = tup[0]
         block_version = tup[1]
-        block_data = buf[16:]
-        return undo_log_block(block_id, block_data, block_version)
+        block_size = tup[2]
+        block_data = buf[24:]
+        return undo_log_block(block_id, block_data, block_version, block_size)
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log_block %d %d>" % (self.block_id, self.block_data)
+        return "<undo_log_block %d %d %d>" % (self.block_id, self.block_version, self.block_size)
 
 
 class undo_log(object):
@@ -64,7 +64,7 @@ class undo_log(object):
     def __init__(self, fs, path):
         self.fs = fs
         self.data_path = path
-        self.log_path = self._makeLogPath(path):
+        self.log_path = self._makeLogPath(path)
 
         # read log data
         if not self.fs.exists(self.log_path):
@@ -74,7 +74,7 @@ class undo_log(object):
             self.log = undo_log_block.fromBinary(buf)
 
     def _makeLogPath(self, path):
-        return "%s%s" % (path, UNDO_LOG_SUFFIX)
+        return "%s%s" % (path, self.UNDO_LOG_SUFFIX)
 
     def clearLog(self):
         if self.log:
@@ -82,8 +82,8 @@ class undo_log(object):
                 self.fs.unlink(self.log_path)
         self.log = None
 
-    def write(self, block_id, block_data, block_version):
-        self.log = undo_log_block(block_id, block_data, block_version)
+    def write(self, block_id, block_data, block_version, block_size):
+        self.log = undo_log_block(block_id, block_data, block_version, block_size)
         self.fs.write(self.log_path, 0, self.log.toBinary())
 
     def read(self):
@@ -101,15 +101,92 @@ class undo_log(object):
     def __repr__(self):
         return "<undo_log %s %s>" % (self.data_path, self.log_path, self.log)
 
+class block_meta(object):
+    def __init__(self, block_version, block_size):
+        self.block_version = block_version
+        self.block_size = block_size
+
+    def toString(self):
+        return "%d|%d" % (self.block_version, self.block_size)
+
+    @classmethod
+    def fromString(cls, s):
+        arr = s.split("|")
+        return block_meta(int(arr[0]), int(arr[1]))
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<block_meta %d %d>" % (self.block_version, self.block_size)
+
+class file_meta(object):
+    def __init__(self, block_meta_arr=[]):
+        self.block_meta_arr = block_meta_arr
+
+    def getSize(self):
+        return len(self.block_meta_arr)
+
+    def setSize(self, size):
+        if len(self.block_meta_arr) > size:
+            # trim out
+            self.block_meta_arr = self.block_meta_arr[:size]
+        else:
+            # zero fill
+            for i in range(0, size - len(self.block_meta_arr)):
+                self.block_meta_arr.append(block_meta(0,0))
+
+    def set(self, block_id, block_version, block_size):
+        if len(self.block_meta_arr) > block_id:
+            self.block_meta_arr[block_id].block_version = block_version
+            self.block_meta_arr[block_id].block_size = block_size
+        else:
+            # zero fill
+            for i in range(0, block_id - len(self.block_meta_arr) + 1):
+                self.block_meta_arr.append(block_meta(0,0))
+
+            self.block_meta_arr[block_id].block_version = block_version
+            self.block_meta_arr[block_id].block_size = block_size
+
+    def get(self, block_id):
+        if len(self.block_meta_arr) > block_id:
+            return self.block_meta_arr[block_id]
+        else:
+            return block_meta(0,0)
+
+    def toString(self):
+        s = ""
+        for meta in self.block_meta_arr:
+            if len(s) > 0:
+                s += ","
+            s += meta.toString()
+        return s
+
+    @classmethod
+    def fromString(cls, s):
+        arr = s.split(",")
+        block_meta_arr = []
+        for a in arr:
+            m = block_meta.fromString(a)
+            block_meta_arr.append(m)
+        return file_meta(block_meta_arr)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "<file_meta %s>" % (self.block_meta_arr)
+
 class replica(object):
     REPLICA_INCOMPLETE_SUFFIX = ".part"
-    REPLICA_BLOCK_VERSIONS_XATTR_KEY = "block_versions"
+    REPLICA_BLOCK_INFO_XATTR_KEY = "user.block_info"
 
-    def __init__(self, fs, path, block_size):
+    def __init__(self, fs, path, chunk_size):
         self.fs = fs
         self.data_path = path
-        self.block_size = block_size
+        self.chunk_size = chunk_size
         self.log = undo_log(fs, path)
+        self.lock = threading.RLock()
 
     def _lock(self):
         self.lock.acquire()
@@ -121,7 +198,7 @@ class replica(object):
         return self.lock
 
     def _makeIncompletePath(self, path):
-        return "%s%s" % (path, UNDO_LOG_SUFFIX)
+        return "%s%s" % (path, self.REPLICA_INCOMPLETE_SUFFIX)
 
     def _makeDirs(self, path):
         with self._getLock():
@@ -158,9 +235,9 @@ class replica(object):
                 self._writeBlockToDataFile(incomplete_path, log_data.block_id, log_data.block_data)
 
                 # step2: copy old version back
-                block_versions = self._readBlockVersionsFromDataFile(incomplete_path)
-                block_versions[log.block_id] = log_data.block_version
-                self._writeBlockVersionsToDataFile(incomplete_path, block_versions)
+                block_info = self._readBlockInfoFromDataFile(incomplete_path)
+                block_info.set(log_data.block_id, log_data.block_version, log_data.block_size)
+                self._writeBlockInfoToDataFile(incomplete_path, block_info)
 
                 # step3: remove log
                 self.log.clearLog()
@@ -170,41 +247,44 @@ class replica(object):
 
     def replicateBlock(self, block_id, block_data, block_version):
         with self._getLock():
-            self._makeDirs()
+            self._makeDirs(self.data_path)
 
             incomplete_path = self._makeIncompletePath(self.data_path)
-            old_block_versions = []
+            block_info = file_meta()
+            fresh_file = True
 
             # step1: copy an old block to log
             if self.fs.exists(self.data_path):
-                old_block_data = self._readBlockFromDataFile(self.data_path, block_id)
-                if old_block_data:
-                    # read block version
-                    old_block_versions = self._readBlockVersionsFromDataFile(self.data_path)
-                    old_block_version = old_block_versions[block_id]
+                block_info = self._readBlockInfoFromDataFile(self.data_path)
+                block_meta = block_info.get(block_id)
+                if block_meta.block_version >= block_version:
+                    # nothing to do
+                    return
 
+                if block_meta.block_version != 0:
+                    old_block_data = self._readBlockFromDataFile(self.data_path, block_id, block_meta.block_size)
                     # copy to log
-                    self.log.write(block_id, old_block_data, old_block_version)
+                    self.log.write(block_id, old_block_data, block_meta.block_version, block_meta.block_size)
+
+                fresh_file = False
 
             # step2: rename the target file - in transaction
-            self.beginTransaction()
+            if not fresh_file:
+                self.beginTransaction()
 
             # step3: set the version in the data file negative
-            if len(old_block_versions) > block_id:
-                old_block_versions[block_id] *= -1
-            else:
-                fill_count = block_id - len(self.old_block_versions) + 1
-                for i in range(0, fill_count):
-                    old_block_versions.append(0)
+            block_meta = block_info.get(block_id)
+            block_info.set(block_id, block_meta.block_version * -1, block_meta.block_size)
 
-            self._writeBlockVersionsToDataFile(incomplete_path, old_block_versions)
+            if not fresh_file:
+                self._writeBlockInfoToDataFile(incomplete_path, block_info)
 
             # step4: overwrite data block
             self._writeBlockToDataFile(incomplete_path, block_id, block_data)
 
             # step5: set the version in the data file new version
-            old_block_versions[block_id] = block_version
-            self._writeBlockVersionsToDataFile(incomplete_path, old_block_versions)
+            block_info.set(block_id, block_version, len(block_data))
+            self._writeBlockInfoToDataFile(incomplete_path, block_info)
 
             # step7: remove undo log & rename the target file back
             self.commit()
@@ -221,64 +301,58 @@ class replica(object):
     def readBlock(self, block_id, block_version):
         with self._getLock():
             if self.fs.exists(self.data_path):
-                versions = self._readBlockVersionsFromDataFile(self.data_path)
-                if block_id < len(versions):
-                    version = versions[block_id]
-                    if version == block_version:
-                        block_data = self.fs.read(self.data_path, block_id * self.block_size, self.block_size)
-                        return block_data
+                block_info = self._readBlockInfoFromDataFile(self.data_path)
+                block_meta = block_info.get(block_id)
+                if block_meta.block_version == block_version:
+                    block_data = self.fs.read(self.data_path, block_id * self.chunk_size, block_meta.block_size)
+                    return block_data
             return None
 
     def deleteBlock(self, block_id, block_version):
         with self._getLock():
             if self.fs.exists(self.data_path):
-                versions = self._readBlockVersionsFromDataFile(self.data_path)
-                if block_id < len(versions):
-                    version = versions[block_id]
-                    if version == block_version:
-                        # mark the block deleted
-                        versions[block_id] = 0
-                        all_blocks_deleted = True
-                        for v in versions:
-                            if v != 0:
-                                all_blocks_deleted = False
-                                break
+                block_info = self._readBlockInfoFromDataFile(self.data_path)
+                block_meta = block_info.get(block_id)
+                if block_meta.block_version == block_version:
+                    # mark the block deleted
+                    block_info.set(block_id, 0, 0)
 
-                        if all_blocks_deleted:
-                            self.fs.unlink(self.data_path)
-                        else:
-                            self._writeBlockVersionsToDataFile(self.data_path, versions)
+                    last_live_block_id = -1
+                    for i in range(0, block_info.getSize()):
+                        block_meta = block_info.get(i)
+                        if block_meta.block_version != 0:
+                            last_live_block_id = i
+                            break
 
-                        return True
+                    if last_live_block_id == -1:
+                        self.fs.unlink(self.data_path)
+                    else:
+                        block_meta = block_info.get(last_live_block_id)
+                        self._writeBlockInfoToDataFile(self.data_path, block_info)
+                        self.fs.truncate(self.data_path, last_live_block_id * self.chunk_size + block_meta.block_size)
+
+                    return True
             return False
 
-    def _readBlockFromDataFile(self, path, block_id):
+    def _readBlockFromDataFile(self, path, block_id, block_size):
         with self._getLock():
-            block_data = self.fs.read(path, block_id * self.block_size, self.block_size)
+            block_data = self.fs.read(path, block_id * self.chunk_size, block_size)
             return block_data
 
     def _writeBlockToDataFile(self, path, block_id, block_data):
         with self._getLock():
-            self.fs.write(path, block_id * self.block_size, block_data)
+            self.fs.write(path, block_id * self.chunk_size, block_data)
 
-    def _readBlockVersionsFromDataFile(self, path):
+    def _readBlockInfoFromDataFile(self, path):
         with self._getLock():
-            versions_xattr = self.fs.get_xattr(path, REPLICA_BLOCK_VERSIONS_XATTR_KEY)
-            versions_str_arr = versions_xattr.split(",")
-            versions_int_arr = []
-            for version_str in versions_str_arr:
-                versions_int_arr.append(int(version_str))
-            return versions_int_arr
+            block_info_xattr = self.fs.get_xattr(path, self.REPLICA_BLOCK_INFO_XATTR_KEY)
+            block_info = file_meta.fromString(block_info_xattr)
+            return block_info
 
-    def _writeBlockVersionsToDataFile(self, path, versions):
+    def _writeBlockInfoToDataFile(self, path, block_info):
         with self._getLock():
-            value = ""
-            for v in versions:
-                if len(value) > 0:
-                    value += ","
-                value += str(v)
-
-            self.fs.set_xattr(path, REPLICA_BLOCK_VERSIONS_XATTR_KEY, value)
+            value = block_info.toString()
+            self.fs.set_xattr(path, self.REPLICA_BLOCK_INFO_XATTR_KEY, value)
 
     @classmethod
     def isLogPath(cls, path):
@@ -289,9 +363,9 @@ class replica(object):
 Interface class to replication
 """
 class replication(object):
-    def __init__(self, fs, block_size):
+    def __init__(self, fs, chunk_size):
         self.fs = fs
-        self.block_size = block_size
+        self.chunk_size = chunk_size
         self.replicas = {}
         self.lock = threading.RLock()
 
@@ -313,7 +387,7 @@ class replication(object):
         with self._getLock():
             if path not in self.replicas:
                 # create a new replica object
-                self.replicas[path] = replica(self.fs, path, self.block_size)
+                self.replicas[path] = replica(self.fs, path, self.chunk_size)
 
             return self.replicas[path]
 
@@ -334,7 +408,7 @@ class replication(object):
                         if st.directory:
                             stack.append(entry_path)
                         else:
-                            replicas[path] = replica(self.fs, entry_path, self.block_size)
+                            replicas[path] = replica(self.fs, entry_path, self.chunk_size)
 
             self.replicas = replicas
 

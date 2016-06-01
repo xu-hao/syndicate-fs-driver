@@ -203,6 +203,12 @@ class plugin_impl(abstractfs.afsbase):
             irods_path = self._make_irods_path(ascii_path)
             self.irods.write(irods_path, offset, buf)
 
+    def truncate(self, filepath, size):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            irods_path = self._make_irods_path(ascii_path)
+            self.irods.truncate(irods_path, size)
+
     def clear_cache(self, path):
         with self._get_lock():
             if path:

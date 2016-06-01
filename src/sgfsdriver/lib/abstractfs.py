@@ -142,6 +142,11 @@ class afsbase(object):
     def write(self, filepath, offset, buf):
         pass
 
+    # truncate given path with size
+    @abstractmethod
+    def truncate(self, filepath, size):
+        pass
+
     # remove given file
     @abstractmethod
     def unlink(self, filepath):

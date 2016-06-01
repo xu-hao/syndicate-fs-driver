@@ -217,18 +217,26 @@ class plugin_impl(abstractfs.afsbase):
             ascii_path = filepath.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             with open(localfs_path, "r") as f:
-                f.seek(offset)
+                f.seek(offset, 0)
                 buf = f.read(size)
-
             return buf
 
     def write(self, filepath, offset, buf):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
-            with open(localfs_path, "w") as f:
-                f.seek(offset, 0)
-                f.write(buf)
+            fd = os.open(localfs_path, os.O_WRONLY | os.O_CREAT)
+            os.lseek(fd, offset, os.SEEK_SET)
+            os.write(fd, buf)
+            os.close(fd)
+
+    def truncate(self, filepath, size):
+        with self._get_lock():
+            ascii_path = filepath.encode('ascii', 'ignore')
+            localfs_path = self._make_localfs_path(ascii_path)
+            fd = os.open(localfs_path, os.O_WRONLY | os.O_CREAT)
+            os.ftruncate(fd, size)
+            os.close(fd)
 
     def unlink(self, filepath):
         with self._get_lock():
