@@ -261,14 +261,9 @@ class irods_client(object):
     def truncate(self, path, size):
         logger.info("truncate : " + path)
         try:
-            logger.info("truncate: getting a file " + path)
-            obj = self.session.data_objects.get(path)
-            with obj.open('w') as f:
-                if offset != 0:
-                    logger.info("truncate: truncating at " + str(size))
-                    f.truncate(size)
-
-                logger.info("truncate: truncating done")
+            logger.info("truncate: truncating a file " + path)
+            self.session.data_objects.truncate(path, size)
+            logger.info("truncate: truncating done")
 
         except Exception, e:
             logger.error("truncate: " + traceback.format_exc())
