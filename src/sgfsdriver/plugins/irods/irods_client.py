@@ -23,6 +23,8 @@ import logging
 
 from irods.session import iRODSSession
 from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
+from irods.models import DataObject
+from irods.meta import iRODSMeta
 from expiringdict import ExpiringDict
 #from retrying import retry
 #from timeout_decorator import timeout
@@ -308,11 +310,7 @@ class irods_client(object):
         logger.info("set_xattr : " + key + " - " + value)
         try:
             logger.info("set_xattr: set extended attribute to a file " + path + " " + key + "=" + value)
-            obj = self.session.data_objects.get(path)
-            keys = obj.metadata.keys()
-            if key in keys:
-                obj.metadata.remove(key)
-            obj.metadata.add(key, value)
+            self.session.metadata.set(DataObject, path, iRODSMeta(key, value))
             logger.info("set_xattr: done")
 
         except Exception, e:
@@ -325,10 +323,11 @@ class irods_client(object):
         value = None
         try:
             logger.info("get_xattr: get extended attribute from a file " + path + " " + key)
-            obj = self.session.data_objects.get(path)
-            meta = obj.metadata.get_one(key)
-            if meta:
-                value = meta.value
+            attrs = self.session.metadata.get(DataObject, path)
+            for attr in attrs:
+                if key == attr.name:
+                    value = attr.value
+                    break
             logger.info("get_xattr: done")
 
         except Exception, e:
@@ -340,11 +339,12 @@ class irods_client(object):
 
     def list_xattr(self, path):
         logger.info("list_xattr : " + key)
-        keys = None
+        keys = []
         try:
             logger.info("list_xattr: get extended attributes from a file " + path)
-            obj = self.session.data_objects.get(path)
-            keys = obj.metadata.keys()
+            attrs = self.session.metadata.get(DataObject, path)
+            for attr in attrs:
+                keys.append(attr.name)
             logger.info("list_xattr: done")
 
         except Exception, e:
