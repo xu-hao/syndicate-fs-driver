@@ -1,0 +1,12 @@
+Format: http://dep.debian.net/deps/dep5
+Upstream-Name: syndicate-fs-driver
+Upstream-Contact: Illyoung Choi <iychoi@email.arizona.edu>
+Source: https://github.com/syndicate-storage/syndicate-fs-driver
+
+Files:* 
+License: Apache-2.0
+Copyright: 2016 Illyoung Choi <iychoi@email.arizona.edu>
+
+License: Apache-2.0
+ Found in `/usr/share/common-licenses/Apache-2.0`
+
