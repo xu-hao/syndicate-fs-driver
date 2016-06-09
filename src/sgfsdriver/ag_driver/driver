@@ -303,9 +303,7 @@ def refresh( request, driver_config, driver_secrets ):
         # update
         gateway.log_error( "Still present: '%s'" % file_path )
         entry = abstractfs.afsevent( file_path, fs.stat( file_path ) )
-        datasets_update_cb([], [], [entry])
-        # resync
-        _resync( os.path.dirname( file_path ) )
+        datasets_update_cb([entry], [], [])
 
     return 0
 
