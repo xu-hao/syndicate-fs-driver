@@ -232,7 +232,7 @@ class irods_client(object):
             traceback.print_exc()
             raise e
 
-        logger.info("read: returning the buf(" + buf + ")")
+        #logger.info("read: returning the buf(" + buf + ")")
         return buf
 
     def write(self, path, offset, buf):
