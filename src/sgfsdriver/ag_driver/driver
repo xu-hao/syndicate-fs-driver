@@ -95,6 +95,8 @@ def _initFS( driver_config, driver_secrets, role ):
         gateway.log_error( str( e ) )
         traceback.print_exc()
         return False
+
+    gateway.log_error( "Driver initialized" )
     return True
 
 
@@ -115,24 +117,29 @@ def datasets_update_cb( updated_entries, added_entries, removed_entries ):
         if u.stat and not u.stat.directory:
             # file
             cmd = gateway.make_metadata_command( "put", "file", 0555, u.stat.size, u.path, write_ttl=DEFAULT_SCAN_FILE_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
         else:
             # directory
             cmd = gateway.make_metadata_command( "put", "directory", 0555, None, u.path, write_ttl=DEFAULT_SCAN_DIRECTORY_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
 
     for a in added_entries:
         if a.stat and not a.stat.directory:
             # file
             cmd = gateway.make_metadata_command( "put", "file", 0555, a.stat.size, a.path, write_ttl=DEFAULT_SCAN_FILE_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
         else:
             # directory
             cmd = gateway.make_metadata_command( "put", "directory", 0555, None, a.path, write_ttl=DEFAULT_SCAN_DIRECTORY_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
 
     for r in removed_entries:
         cmd = gateway.make_metadata_delete_command( r.path )
+        gateway.log_error( "Queuing a command %s" % cmd['path'] )
         command_queue.put( cmd )
 
 
@@ -220,6 +227,7 @@ def next_dataset( driver_config, driver_secrets ):
     while True:
         # this will block if command is not immediately available
         cmd = command_queue.get(True)
+        gateway.log_error( "Processing a new command %s" % cmd['path'] )
 
         if cmd is not None:
             # send the command to the AG and get back the result
@@ -228,6 +236,7 @@ def next_dataset( driver_config, driver_secrets ):
                 gateway.log_error( "Failed to crawl %s" % cmd['path'] )
 
             command_queue.task_done()
+            gateway.log_error( "Processed a command %s" % cmd['path'] )
 
             # have more data - wait for next commands
             return True
@@ -258,6 +267,7 @@ def refresh( request, driver_config, driver_secrets ):
         # delete
         gateway.log_error( "No longer present: '%s'" % file_path )
         cmd = gateway.make_metadata_delete_command( file_path )
+        gateway.log_error( "Queuing a command %s" % cmd['path'] )
         command_queue.put( cmd )
     else:
         # update
@@ -266,13 +276,16 @@ def refresh( request, driver_config, driver_secrets ):
         if not stat.directory:
             # file
             cmd = gateway.make_metadata_command( "put", "file", 0555, stat.size, file_path, write_ttl=DEFAULT_REFRESH_FILE_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
         else:
             # directory
             cmd = gateway.make_metadata_command( "put", "directory", 0555, None, file_path, write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL )
+            gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( cmd )
 
     # need to block until the queued command is processed
+    gateway.log_error( "Waiting for a new command to be processed" )
     command_queue.join()
 
     return 0
