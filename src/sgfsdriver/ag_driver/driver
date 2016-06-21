@@ -41,7 +41,7 @@ fs = None
 command_queue = Queue.Queue(0)
 
 DEFAULT_SCAN_FILE_TTL = 1000 * 60 * 5 # 5mins
-DEFAULT_SCAN_DIRECTORY_TTL = 1 # update immediately
+DEFAULT_SCAN_DIRECTORY_TTL = 1000 # expire very soon
 DEFAULT_REFRESH_FILE_TTL = 1000 * 60 * 5 # 5mins
 DEFAULT_REFRESH_DIRECTORY_TTL = 1000 * 60 * 5 # 5 mins
 
