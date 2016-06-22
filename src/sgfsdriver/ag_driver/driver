@@ -44,7 +44,7 @@ DEFAULT_SCAN_FILE_TTL = 1000 * 60 * 5 # 5mins
 DEFAULT_SCAN_DIRECTORY_TTL = 1000 # expire very soon
 DEFAULT_REFRESH_FILE_TTL = 1000 * 60 * 5 # 5mins
 DEFAULT_REFRESH_DIRECTORY_TTL = 1000 * 60 * 5 # 5 mins
-DEFAULT_WRITE_TTL = 1000 # 1sec
+DEFAULT_READ_TTL = 1000 * 60 *5 # 5min
 
 
 def _initFS( driver_config, driver_secrets, role ):
@@ -117,24 +117,24 @@ def datasets_update_cb( updated_entries, added_entries, removed_entries ):
     for u in updated_entries:
         if u.stat and not u.stat.directory:
             # file
-            cmd = gateway.make_metadata_command( "put", "file", 0555, u.stat.size, u.path, read_ttl=DEFAULT_SCAN_FILE_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "file", 0555, u.stat.size, u.path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_SCAN_FILE_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, None) )
         else:
             # directory
-            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, u.path, read_ttl=DEFAULT_SCAN_DIRECTORY_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, u.path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_SCAN_DIRECTORY_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, None) )
 
     for a in added_entries:
         if a.stat and not a.stat.directory:
             # file
-            cmd = gateway.make_metadata_command( "put", "file", 0555, a.stat.size, a.path, read_ttl=DEFAULT_SCAN_FILE_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "file", 0555, a.stat.size, a.path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_SCAN_FILE_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, None) )
         else:
             # directory
-            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, a.path, read_ttl=DEFAULT_SCAN_DIRECTORY_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, a.path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_SCAN_DIRECTORY_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, None) )
 
@@ -283,12 +283,12 @@ def refresh( request, driver_config, driver_secrets ):
         stat = fs.stat( file_path )
         if not stat.directory:
             # file
-            cmd = gateway.make_metadata_command( "put", "file", 0555, stat.size, file_path, read_ttl=DEFAULT_REFRESH_FILE_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "file", 0555, stat.size, file_path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_REFRESH_FILE_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, sem) )
         else:
             # directory
-            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, file_path, read_ttl=DEFAULT_REFRESH_DIRECTORY_TTL, write_ttl=DEFAULT_WRITE_TTL )
+            cmd = gateway.make_metadata_command( "put", "directory", 0555, None, file_path, read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL )
             gateway.log_error( "Queuing a command %s" % cmd['path'] )
             command_queue.put( (cmd, sem) )
 
