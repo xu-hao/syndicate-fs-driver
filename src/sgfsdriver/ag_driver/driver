@@ -35,6 +35,7 @@ import sgfsdriver.lib.abstractfs as abstractfs
 from sgfsdriver.lib.pluginloader import pluginloader
 
 storage_dir = None
+sync_fully = False
 fs = None
 
 # will store commands to be processed
@@ -50,6 +51,7 @@ DEFAULT_READ_TTL = 1000 * 60 *5 # 5min
 def _initFS( driver_config, driver_secrets, role ):
     global fs
     global storage_dir
+    global sync_fully
 
     if fs:
         return True
@@ -69,6 +71,11 @@ def _initFS( driver_config, driver_secrets, role ):
 
     storage_dir = driver_config['DATASET_DIR']
     storage_dir = "/" + storage_dir.strip("/")
+
+    if driver_config.has_key('DATASET_SYNC_FULLY'):
+        sync_fully = driver_config['DATASET_SYNC_FULLY']
+    else:
+        sync_fully = True
 
     plugin = driver_config['DRIVER_FS_PLUGIN']
 
@@ -146,6 +153,7 @@ def datasets_update_cb( updated_entries, added_entries, removed_entries ):
 
 def _resync( path ):
     global fs
+    global sync_fully
 
     stack = [path]
     while len( stack ) > 0:
@@ -158,11 +166,10 @@ def _resync( path ):
             st = fs.stat( entry_path )
             e = abstractfs.afsevent( entry_path, st )
 
-            """
-            # do not go into sub-directories at this moment
             if st.directory:
-                stack.append( entry_path )
-            """
+                if sync_fully:
+                    # do sync recursively
+                    stack.append( entry_path )
 
             datasets_update_cb( [], [e], [] )
 
