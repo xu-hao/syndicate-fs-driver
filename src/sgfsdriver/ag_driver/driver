@@ -160,18 +160,19 @@ def _resync( path ):
         last_dir = stack.pop( 0 )
         fs.clear_cache( last_dir )
         entries = fs.list_dir( last_dir )
-        for entry in entries:
-            # entry is a filename
-            entry_path = last_dir.rstrip( "/" ) + "/" + entry
-            st = fs.stat( entry_path )
-            e = abstractfs.afsevent( entry_path, st )
+        if entries:
+            for entry in entries:
+                # entry is a filename
+                entry_path = last_dir.rstrip( "/" ) + "/" + entry
+                st = fs.stat( entry_path )
+                e = abstractfs.afsevent( entry_path, st )
 
-            if st.directory:
-                if sync_fully:
-                    # do sync recursively
-                    stack.append( entry_path )
+                if st.directory:
+                    if sync_fully:
+                        # do sync recursively
+                        stack.append( entry_path )
 
-            datasets_update_cb( [], [e], [] )
+                datasets_update_cb( [], [e], [] )
 
 
 def driver_init( driver_config, driver_secrets ):

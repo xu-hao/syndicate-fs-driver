@@ -166,12 +166,11 @@ class irods_client(object):
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def list_dir(self, path):
         stats = self._ensureDirEntryStatLoaded(path)
+        entries = []
         if stats:
-            entries = []
             for stat in stats:
                 entries.append(stat.name)
-            return entries
-        return None
+        return entries
 
     #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def is_dir(self, path):
