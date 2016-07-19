@@ -164,13 +164,23 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
             path = gateway.request_path( chunk_request )
             file_path = gateway.path_join( "/", path )
 
-            # use replication module to access a file containing the block
-            replica = replication.replica( fs, file_path, chunk_request.block_size )
-            replica.makeConsistent()
-            buf = replica.readBlock( chunk_request.block_id, chunk_request.block_version )
-            if not buf:
-                gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
-                return -errno.ENOENT
+            if request.request_type == DriverRequest.BLOCK:
+                # use replication module to access a file containing the block
+                replica = replication.replica( fs, file_path, chunk_request.block_size )
+                replica.makeConsistent()
+                buf = replica.readBlock( chunk_request.block_id, chunk_request.block_version )
+                if not buf:
+                    gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
+                    return -errno.ENOENT
+            elif request.request_type == DriverRequest.MANIFEST:
+                file_path = file_path + ".manifest"
+
+                if not fs.exists( file_path ):
+                    gateway.log_error( "WARN: '%s' does not exist" % file_path )
+                    return -errno.ENOENT
+
+                # read
+                buf = fs.read( file_path, 0,  chunk_request.block_size )
 
         outfile.write( buf )
     except Exception:
@@ -189,19 +199,31 @@ def write_chunk( chunk_request, chunk_buf, driver_config, driver_secrets ):
 
             # create parent directory
             parent_path = os.path.dirname( file_path )
-            if not self.fs.exists( parent_path ):
-                self.fs.make_dirs( parent_path )
+            if not fs.exists( parent_path ):
+                fs.make_dirs( parent_path )
 
             # write
             fs.write( file_path, 0, chunk_buf )
         else:
             path = gateway.request_path( chunk_request )
             file_path = gateway.path_join( "/", path )
+            parent_path = os.path.dirname( file_path )
+            if not fs.exists( parent_path ):
+                fs.make_dirs( parent_path )
 
-            # use replication module to access a file containing the block
-            replica = replication.replica( fs, file_path, chunk_request.block_size )
-            replica.makeConsistent()
-            replica.replicateBlock( chunk_request.block_id, chunk_buf, chunk_request.block_version )
+            if request.request_type == DriverRequest.BLOCK:
+                # use replication module to access a file containing the block
+                replica = replication.replica( fs, file_path, chunk_request.block_size )
+                replica.makeConsistent()
+                replica.replicateBlock( chunk_request.block_id, chunk_buf, chunk_request.block_version )
+            elif request.request_type == DriverRequest.MANIFEST:
+                file_path = file_path + ".manifest"
+
+                if fs.exists( file_path ):
+                    fs.unlink( file_path )
+
+                fs.write( file_path, 0, chunk_buf )
+
     except Exception:
         gateway.log_error( traceback.format_exc() )
         return -errno.EIO
@@ -222,11 +244,17 @@ def delete_chunk( chunk_request, driver_config, driver_secrets ):
         else:
             path = gateway.request_path( chunk_request )
             file_path = gateway.path_join( "/", path )
+            if request.request_type == DriverRequest.BLOCK:
+                # use replication module to access a file containing the block
+                replica = replication.replica( fs, file_path, chunk_request.block_size )
+                replica.makeConsistent()
+                replica.deleteBlock( chunk_request.block_id, chunk_request.block_version )
+            elif request.request_type == DriverRequest.MANIFEST:
+                file_path = file_path + ".manifest"
 
-            # use replication module to access a file containing the block
-            replica = replication.replica( fs, file_path, chunk_request.block_size )
-            replica.makeConsistent()
-            replica.deleteBlock( chunk_request.block_id, chunk_request.block_version )
+                if fs.exists( file_path ):
+                    fs.unlink( file_path )
+
     except Exception:
         gateway.log_error( traceback.format_exc() )
         return -errno.EIO
