@@ -236,19 +236,19 @@ class plugin_impl(abstractfs.afsbase):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
-            self.irods.setxattr(irods_path, key, value)
+            self.irods.setx_attr(irods_path, key, value)
 
     def get_xattr(self, filepath, key):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
-            return self.irods.getxattr(irods_path, key)
+            return self.irods.get_xattr(irods_path, key)
 
     def list_xattr(self, filepath):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_irods_path(ascii_path)
-            return self.irods.listxattr(localfs_path)
+            return self.irods.list_xattr(localfs_path)
 
     def plugin(self):
         return self.__class__
