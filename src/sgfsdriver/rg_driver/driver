@@ -32,6 +32,7 @@ import sgfsdriver.lib.abstractfs as abstractfs
 import sgfsdriver.lib.replication as replication
 
 from sgfsdriver.lib.pluginloader import pluginloader
+from syndicate.protobufs.sg_pb2 import DriverRequest, Manifest
 
 storage_dir = None
 fs = None
