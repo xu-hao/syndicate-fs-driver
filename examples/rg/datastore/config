@@ -3,8 +3,8 @@
    "BLOCK_REPLICATION": false,
    "EXEC_FMT":          "/usr/bin/env python -m syndicate.rg.gateway",
    "DRIVER":            "syndicate.rg.drivers.fs",
-   "DRIVER_FS_PLUGIN": "datastore",
-   "DRIVER_FS_PLUGIN_CONFIG": 
+   "DRIVER_FS_PLUGIN":  "datastore",
+   "DRIVER_FS_PLUGIN_CONFIG":
       {
          "irods":
             {
@@ -12,5 +12,5 @@
                "port":  1247,
                "zone":  "iplant"
             }
-      }                     
+      }
 }

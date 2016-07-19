@@ -152,9 +152,11 @@ class plugin_impl(abstractfs.afsbase):
         if not irods_config:
             raise ValueError("irods configuration is not given correctly")
 
-        bms_config = config.get("bms")
-        if not bms_config:
-            raise ValueError("bms configuration is not given correctly")
+        bms_config = None
+        if role == abstractfs.afsrole.DISCOVER:
+            bms_config = config.get("bms")
+            if not bms_config:
+                raise ValueError("bms configuration is not given correctly")
 
         # set role
         self.role = role
