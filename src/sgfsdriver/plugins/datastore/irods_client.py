@@ -247,7 +247,7 @@ class irods_client(object):
                         logger.error("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
                         raise Exception("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
 
-                logger.info("write: writing buffer " + len(buf))
+                logger.info("write: writing buffer " + str(len(buf)))
                 f.write(buf)
                 logger.info("write: writing done")
 
