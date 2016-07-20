@@ -174,7 +174,7 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
                     gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
                     return -errno.ENOENT
             elif chunk_request.request_type == DriverRequest.MANIFEST:
-                file_path = file_path + ".manifest"
+                file_path = file_path + (".manifest.%s.%s" % (chunk_request.manifest_mtime_sec, chunk_request.manifest_mtime_nsec))
 
                 if not fs.exists( file_path ):
                     gateway.log_error( "WARN: '%s' does not exist" % file_path )
@@ -221,7 +221,7 @@ def write_chunk( chunk_request, chunk_buf, driver_config, driver_secrets ):
                 replica.makeConsistent()
                 replica.replicateBlock( chunk_request.block_id, chunk_buf[:byte_len], chunk_request.block_version )
             elif chunk_request.request_type == DriverRequest.MANIFEST:
-                file_path = file_path + ".manifest"
+                file_path = file_path + (".manifest.%s.%s" % (chunk_request.manifest_mtime_sec, chunk_request.manifest_mtime_nsec))
 
                 if fs.exists( file_path ):
                     fs.unlink( file_path )
@@ -254,7 +254,7 @@ def delete_chunk( chunk_request, driver_config, driver_secrets ):
                 replica.makeConsistent()
                 replica.deleteBlock( chunk_request.block_id, chunk_request.block_version )
             elif chunk_request.request_type == DriverRequest.MANIFEST:
-                file_path = file_path + ".manifest"
+                file_path = file_path + (".manifest.%s.%s" % (chunk_request.manifest_mtime_sec, chunk_request.manifest_mtime_nsec))
 
                 if fs.exists( file_path ):
                     fs.unlink( file_path )
