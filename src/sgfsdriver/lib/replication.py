@@ -164,11 +164,13 @@ class file_meta(object):
 
     @classmethod
     def fromString(cls, s):
-        arr = s.split(",")
         block_meta_arr = []
-        for a in arr:
-            m = block_meta.fromString(a)
-            block_meta_arr.append(m)
+
+        if s:
+            arr = s.split(",")
+            for a in arr:
+                m = block_meta.fromString(a)
+                block_meta_arr.append(m)
         return file_meta(block_meta_arr)
 
     def __eq__(self, other):
