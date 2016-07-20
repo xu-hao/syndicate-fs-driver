@@ -241,7 +241,7 @@ class irods_client(object):
             if self.exists(path):
                 logger.info("write: opening a file " + path)
                 obj = self.session.data_objects.get(path)
-            else
+            else:
                 logger.info("write: creating a file " + path)
                 obj = self.session.data_objects.create(path)
             with obj.open('w') as f:
