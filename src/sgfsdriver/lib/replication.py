@@ -99,26 +99,27 @@ class undo_log(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log %s %s>" % (self.data_path, self.log_path, self.log)
+        return "<undo_log %s %s %s>" % (self.data_path, self.log_path, self.log)
 
 class block_meta(object):
-    def __init__(self, block_version, block_size):
+    def __init__(self, block_refer_log, block_version, block_size):
+        self.block_refer_log = 0
         self.block_version = block_version
         self.block_size = block_size
 
     def toString(self):
-        return "%d|%d" % (self.block_version, self.block_size)
+        return "%d|%d|%d" % (self.block_refer_log, self.block_version, self.block_size)
 
     @classmethod
     def fromString(cls, s):
         arr = s.split("|")
-        return block_meta(int(arr[0]), int(arr[1]))
+        return block_meta(int(arr[0]), int(arr[1]), int(arr[2]))
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<block_meta %d %d>" % (self.block_version, self.block_size)
+        return "<block_meta %d %d %d>" % (self.block_refer_log, self.block_version, self.block_size)
 
 class file_meta(object):
     def __init__(self, block_meta_arr=[]):
@@ -134,17 +135,19 @@ class file_meta(object):
         else:
             # zero fill
             for i in range(0, size - len(self.block_meta_arr)):
-                self.block_meta_arr.append(block_meta(0,0))
+                self.block_meta_arr.append(block_meta(0,0,0))
 
-    def set(self, block_id, block_version, block_size):
+    def set(self, block_id, block_refer_log, block_version, block_size):
         if len(self.block_meta_arr) > block_id:
+            self.block_meta_arr[block_id].block_refer_log = block_refer_log
             self.block_meta_arr[block_id].block_version = block_version
             self.block_meta_arr[block_id].block_size = block_size
         else:
             # zero fill
             for i in range(0, block_id - len(self.block_meta_arr) + 1):
-                self.block_meta_arr.append(block_meta(0,0))
+                self.block_meta_arr.append(block_meta(0,0,0))
 
+            self.block_meta_arr[block_id].block_refer_log = block_refer_log
             self.block_meta_arr[block_id].block_version = block_version
             self.block_meta_arr[block_id].block_size = block_size
 
@@ -152,7 +155,7 @@ class file_meta(object):
         if len(self.block_meta_arr) > block_id:
             return self.block_meta_arr[block_id]
         else:
-            return block_meta(0,0)
+            return block_meta(0,0,0)
 
     def toString(self):
         s = ""
@@ -238,7 +241,7 @@ class replica(object):
 
                 # step2: copy old version back
                 block_info = self._readBlockInfoFromDataFile(incomplete_path)
-                block_info.set(log_data.block_id, log_data.block_version, log_data.block_size)
+                block_info.set(log_data.block_id, 0, log_data.block_version, log_data.block_size)
                 self._writeBlockInfoToDataFile(incomplete_path, block_info)
 
                 # step3: remove log
@@ -259,9 +262,6 @@ class replica(object):
             if self.fs.exists(self.data_path):
                 block_info = self._readBlockInfoFromDataFile(self.data_path)
                 block_meta = block_info.get(block_id)
-                if block_meta.block_version >= block_version:
-                    # nothing to do
-                    return
 
                 if block_meta.block_version != 0:
                     old_block_data = self._readBlockFromDataFile(self.data_path, block_id, block_meta.block_size)
@@ -274,9 +274,9 @@ class replica(object):
             if not fresh_file:
                 self.beginTransaction()
 
-            # step3: set the version in the data file negative
+            # step3: make the block refer log
             block_meta = block_info.get(block_id)
-            block_info.set(block_id, block_meta.block_version * -1, block_meta.block_size)
+            block_info.set(block_id, 1, block_meta.block_version, block_meta.block_size)
 
             if not fresh_file:
                 self._writeBlockInfoToDataFile(incomplete_path, block_info)
@@ -285,7 +285,7 @@ class replica(object):
             self._writeBlockToDataFile(incomplete_path, block_id, block_data)
 
             # step5: set the version in the data file new version
-            block_info.set(block_id, block_version, len(block_data))
+            block_info.set(block_id, 0, block_version, len(block_data))
             self._writeBlockInfoToDataFile(incomplete_path, block_info)
 
             # step7: remove undo log & rename the target file back
@@ -317,7 +317,7 @@ class replica(object):
                 block_meta = block_info.get(block_id)
                 if block_meta.block_version == block_version:
                     # mark the block deleted
-                    block_info.set(block_id, 0, 0)
+                    block_info.set(block_id, 0, 0, 0)
 
                     last_live_block_id = -1
                     for i in range(0, block_info.getSize()):
