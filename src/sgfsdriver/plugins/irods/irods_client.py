@@ -235,10 +235,15 @@ class irods_client(object):
         return buf
 
     def write(self, path, offset, buf):
-        logger.info("write : " + path)
+        logger.info("write : " + path + ", off(" + str(offset) + "), size(" + str(len(buf)) + ")")
         try:
-            logger.info("write: creating a file " + path)
-            obj = self.session.data_objects.create(path)
+            obj = None
+            if self.exists(path):
+                logger.info("write: opening a file " + path)
+                obj = self.session.data_objects.get(path)
+            else
+                logger.info("write: creating a file " + path)
+                obj = self.session.data_objects.create(path)
             with obj.open('w') as f:
                 if offset != 0:
                     logger.info("write: seeking at " + str(offset))
