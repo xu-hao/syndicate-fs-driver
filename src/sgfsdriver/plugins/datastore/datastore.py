@@ -127,14 +127,14 @@ class BMSEventHandler(object):
 def reconnectAtIRODSFail(func):
     def wrap(self, *args, **kwargs):
         try:
-            func(self, *args, **kwargs)
+            return func(self, *args, **kwargs)
         except Exception as e:
             logger.info("failed to process an operation : " + str(e))
             if self.irods:
                 logger.info("reconnect: trying to reconnect to iRODS")
                 self.irods.reconnect()
                 logger.info("calling the operation again")
-                func(self, *args, **kwargs)
+                return func(self, *args, **kwargs)
 
     return wrap
 
