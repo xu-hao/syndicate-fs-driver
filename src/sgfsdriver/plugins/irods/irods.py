@@ -37,6 +37,20 @@ fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 
+def reconnectAtIRODSFail(func):
+    def wrap(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            logger.info("failed to process an operation : " + str(e))
+            if self.irods:
+                logger.info("reconnect: trying to reconnect to iRODS")
+                self.irods.reconnect()
+                logger.info("calling the operation again")
+                return func(self, *args, **kwargs)
+
+    return wrap
+
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
         if not config:
@@ -147,6 +161,7 @@ class plugin_impl(abstractfs.afsbase):
         if self.irods:
             self.irods.close()
 
+    @reconnectAtIRODSFail
     def stat(self, path):
         with self._get_lock():
             ascii_path = path.encode('ascii','ignore')
@@ -162,6 +177,7 @@ class plugin_impl(abstractfs.afsbase):
                                       create_time=sb.create_time,
                                       modify_time=sb.modify_time)
 
+    @reconnectAtIRODSFail
     def exists(self, path):
         with self._get_lock():
             ascii_path = path.encode('ascii','ignore')
@@ -169,6 +185,7 @@ class plugin_impl(abstractfs.afsbase):
             exist = self.irods.exists(irods_path)
             return exist
 
+    @reconnectAtIRODSFail
     def list_dir(self, dirpath):
         with self._get_lock():
             ascii_path = dirpath.encode('ascii','ignore')
@@ -176,6 +193,7 @@ class plugin_impl(abstractfs.afsbase):
             l = self.irods.list_dir(irods_path)
             return l
 
+    @reconnectAtIRODSFail
     def is_dir(self, dirpath):
         with self._get_lock():
             ascii_path = dirpath.encode('ascii','ignore')
@@ -183,6 +201,7 @@ class plugin_impl(abstractfs.afsbase):
             d = self.irods.is_dir(irods_path)
             return d
 
+    @reconnectAtIRODSFail
     def make_dirs(self, dirpath):
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
@@ -190,6 +209,7 @@ class plugin_impl(abstractfs.afsbase):
             if not self.exists(irods_path):
                 self.irods.make_dirs(irods_path)
 
+    @reconnectAtIRODSFail
     def read(self, filepath, offset, size):
         with self._get_lock():
             ascii_path = filepath.encode('ascii','ignore')
@@ -197,18 +217,21 @@ class plugin_impl(abstractfs.afsbase):
             buf = self.irods.read(irods_path, offset, size)
             return buf
 
+    @reconnectAtIRODSFail
     def write(self, filepath, offset, buf):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             self.irods.write(irods_path, offset, buf)
 
+    @reconnectAtIRODSFail
     def truncate(self, filepath, size):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             self.irods.truncate(irods_path, size)
 
+    @reconnectAtIRODSFail
     def clear_cache(self, path):
         with self._get_lock():
             if path:
@@ -218,12 +241,14 @@ class plugin_impl(abstractfs.afsbase):
             else:
                 self.irods.clear_stat_cache(None)
 
+    @reconnectAtIRODSFail
     def unlink(self, filepath):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             self.irods.unlink(irods_path)
 
+    @reconnectAtIRODSFail
     def rename(self, filepath1, filepath2):
         with self._get_lock():
             ascii_path1 = filepath1.encode('ascii', 'ignore')
@@ -232,18 +257,21 @@ class plugin_impl(abstractfs.afsbase):
             irods_path2 = self._make_irods_path(ascii_path2)
             self.irods.rename(irods_path1, irods_path2)
 
+    @reconnectAtIRODSFail
     def set_xattr(self, filepath, key, value):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
-            self.irods.setx_attr(irods_path, key, value)
+            self.irods.set_xattr(irods_path, key, value)
 
+    @reconnectAtIRODSFail
     def get_xattr(self, filepath, key):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             return self.irods.get_xattr(irods_path, key)
 
+    @reconnectAtIRODSFail
     def list_xattr(self, filepath):
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')

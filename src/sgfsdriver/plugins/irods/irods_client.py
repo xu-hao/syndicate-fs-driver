@@ -124,6 +124,10 @@ class irods_client(object):
     def close(self):
         self.session.cleanup()
 
+    def reconnect(self):
+        self.close()
+        self.connect()
+
     def __enter__(self):
         self.connect()
         return self
