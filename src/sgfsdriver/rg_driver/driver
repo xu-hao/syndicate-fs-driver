@@ -194,8 +194,23 @@ def write_chunk( chunk_request, chunk_buf, driver_config, driver_secrets ):
     global fs
     global block_replication
 
+    byte_offset = gateway.request_byte_offset( chunk_request )
     byte_len = gateway.request_byte_len( chunk_request )
-    gateway.log_error( "byte_len %d" % byte_len )
+
+    block_end = (chunk_request.block_id + 1) * chunk_request.block_size
+    block_start = chunk_request.block_id * chunk_request.block_size
+    actual_block_size = chunk_request.block_size
+
+    if (byte_len + byte_offset) < block_start:
+        gateway.log_error( "WARN: Ignoring ranged out block write - blockId = %d, byte_offset = %d, byte_len = %d" % (chunk_request.block_id, byte_len, byte_offset) )
+        return -errno.EIO
+    elif byte_offset >= block_end:
+        gateway.log_error( "WARN: Ignoring ranged out block write - blockId = %d, byte_offset = %d, byte_len = %d" % (chunk_request.block_id, byte_len, byte_offset) )
+        return -errno.EIO
+
+    if (byte_len + byte_offset) < block_end:
+        # calculate actual block size when the block is not aligned to the block
+        actual_block_size = byte_len + byte_offset - block_start
 
     try:
         if block_replication:
@@ -219,7 +234,7 @@ def write_chunk( chunk_request, chunk_buf, driver_config, driver_secrets ):
                 # use replication module to access a file containing the block
                 replica = replication.replica( fs, file_path, chunk_request.block_size )
                 replica.makeConsistent()
-                replica.replicateBlock( chunk_request.block_id, chunk_buf[:byte_len], chunk_request.block_version )
+                replica.replicateBlock( chunk_request.block_id, chunk_buf[:actual_block_size], chunk_request.block_version )
             elif chunk_request.request_type == DriverRequest.MANIFEST:
                 file_path = file_path + (".manifest.%s.%s" % (chunk_request.manifest_mtime_sec, chunk_request.manifest_mtime_nsec))
 
