@@ -41,11 +41,11 @@ class bms_registration_result_client(object):
     def fromDict(cls, dictionary):
         return bms_registration_result_client(dictionary['user_id'], dictionary['application_name'])
 
-    def __repr__(self): 
-        return "<bms_registration_result_client %s %s>" % (self.user_id, self.application_name) 
+    def __repr__(self):
+        return "<bms_registration_result_client %s %s>" % (self.user_id, self.application_name)
 
 class bms_registration_result(object):
-    def __init__(self, client=None, 
+    def __init__(self, client=None,
                        lease_start=0,
                        lease_expire=0):
         self.client = client
@@ -56,7 +56,7 @@ class bms_registration_result(object):
     def fromJson(cls, json_string):
         if bms_registration_result.isRegistrationJson(json_string):
             msg = json.loads(json_string)
-            return bms_registration_result(client=bms_registration_result_client.fromDict(msg['client']), 
+            return bms_registration_result(client=bms_registration_result_client.fromDict(msg['client']),
                                 lease_start=msg['lease_start'],
                                 lease_expire=msg['lease_expire'])
         else:
@@ -70,11 +70,11 @@ class bms_registration_result(object):
                 return True
         return False
 
-    def __repr__(self): 
-        return "<bms_registration_result %s %d %d>" % (self.client, self.lease_start, self.lease_expire) 
+    def __repr__(self):
+        return "<bms_registration_result %s %d %d>" % (self.client, self.lease_start, self.lease_expire)
 
 class bms_message_acceptor(object):
-    def __init__(self, acceptor="path", 
+    def __init__(self, acceptor="path",
                        pattern="*"):
         self.acceptor = acceptor
         self.pattern = pattern
@@ -82,8 +82,8 @@ class bms_message_acceptor(object):
     def asDict(self):
         return self.__dict__
 
-    def __repr__(self): 
-        return "<bms_message_acceptor %s %s>" % (self.acceptor, self.pattern) 
+    def __repr__(self):
+        return "<bms_message_acceptor %s %s>" % (self.acceptor, self.pattern)
 
 class bms_client(object):
     def __init__(self, host=None,
@@ -150,11 +150,11 @@ class bms_client(object):
         self.connection.ioloop.start()
 
     def connect(self):
-        credentials = pika.PlainCredentials(self.user, 
+        credentials = pika.PlainCredentials(self.user,
                                             self.password)
-        parameters = pika.ConnectionParameters(self.host, 
-                                               self.port, 
-                                               self.vhost, 
+        parameters = pika.ConnectionParameters(self.host,
+                                               self.port,
+                                               self.vhost,
                                                credentials)
         self.connection = pika.SelectConnection(parameters,
                                                 self._onConnectionOpen,
@@ -180,16 +180,16 @@ class bms_client(object):
 
         # declare a queue
         self.queue = self.user + "/" + self.appid
-        self.channel.queue_declare(self._onQueueDeclareok, 
+        self.channel.queue_declare(self._onQueueDeclareok,
                                    queue=self.queue,
-                                   durable=False, 
-                                   exclusive=False, 
+                                   durable=False,
+                                   exclusive=False,
                                    auto_delete=True)
 
     def _onQueueDeclareok(self, mothod_frame):
         # set consumer
         self.channel.add_on_cancel_callback(self._onConsumerCancelled)
-        self.consumer_tag = self.channel.basic_consume(self._onMessage, 
+        self.consumer_tag = self.channel.basic_consume(self._onMessage,
                                                        queue=self.queue,
                                                        no_ack=False)
 
@@ -206,7 +206,9 @@ class bms_client(object):
         if self.registration_timer:
             self.registration_timer.cancel()
             self.registration_timer = None
-        self.connection.close()
+
+        if self.connection:
+            self.connection.close()
 
     def _onConsumerCancelled(self, method_frame):
         if self.channel:
@@ -226,7 +228,8 @@ class bms_client(object):
                 self.on_message_callback(body)
 
     def reconnect(self):
-        self.connection.ioloop.stop()
+        if self.connection:
+            self.connection.ioloop.stop()
 
         if not self.closing:
             self.connect()
@@ -237,13 +240,15 @@ class bms_client(object):
         if self.channel:
             self.channel.basic_cancel(self._onCancelok, self.consumer_tag)
 
-        self.connection.ioloop.start()
-        self.connection.close()
+        if self.connection:
+            self.connection.ioloop.start()
+            self.connection.close()
 
         self.consumer_thread = None
 
     def _onCancelok(self, unused_frame):
-        self.channel.close()
+        if self.channel:
+            self.channel.close()
 
     def reRegister(self):
         if self.channel:
@@ -260,7 +265,7 @@ class bms_client(object):
                                    routing_key=BMS_REGISTRATION_QUEUE,
                                    properties=prop,
                                    body=msg)
-        
+
         if self.registration_timer:
             self.registration_timer.cancel()
 
@@ -271,7 +276,7 @@ class bms_client(object):
     def register(self, acceptors):
         # make a registration message
         """
-        reg_msg = {"request": "lease", 
+        reg_msg = {"request": "lease",
                     "client": {"user_id": self.user,
                                 "application_name": self.appid},
                     "acceptors": [{"acceptor": "path",
@@ -281,11 +286,10 @@ class bms_client(object):
         for acceptor in acceptors:
             acceptor_arr.append(acceptor.asDict())
 
-        reg_msg = {"request": "lease", 
+        reg_msg = {"request": "lease",
                     "client": {"user_id": self.user,
                                 "application_name": self.appid},
                     "acceptors": acceptor_arr}
         reg_msg_str = json.dumps(reg_msg)
 
         self._registerByString(reg_msg_str)
-
