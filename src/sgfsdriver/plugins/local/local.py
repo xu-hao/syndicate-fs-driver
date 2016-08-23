@@ -76,6 +76,8 @@ class InotifyEventHandler(pyinotify.ProcessEvent):
 
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
+        logger.info("__init__")
+
         if not config:
             raise ValueError("fs configuration is not given correctly")
 
@@ -111,9 +113,12 @@ class plugin_impl(abstractfs.afsbase):
         return self.lock
 
     def on_update_detected(self, operation, path):
+        logger.info("on_update_detected - %s, %s" % (operation, path))
+
         ascii_path = path.encode('ascii','ignore')
         driver_path = self._make_driver_path(ascii_path)
 
+        self.clear_cache(driver_path)
         if operation == "remove":
             if self.notification_cb:
                 entry = abstractfs.afsevent(driver_path, None)
@@ -142,6 +147,8 @@ class plugin_impl(abstractfs.afsbase):
         return path.rstrip("/")
 
     def connect(self):
+        logger.info("connect")
+
         if self.role == abstractfs.afsrole.DISCOVER:
             if not os.path.exists(self.work_root):
                 raise IOError("work_root does not exist")
@@ -159,6 +166,8 @@ class plugin_impl(abstractfs.afsbase):
                 self.close()
 
     def close(self):
+        logger.info("close")
+
         if self.role == abstractfs.afsrole.DISCOVER:
             if self.watch_manager and self.watch_directory:
                 self.watch_manager.rm_watch(self.watch_directory.values())
@@ -167,6 +176,8 @@ class plugin_impl(abstractfs.afsbase):
                 self.notifier.stop()
 
     def stat(self, path):
+        logger.info("stat - %s" % path)
+
         with self._get_lock():
             ascii_path = path.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -182,6 +193,8 @@ class plugin_impl(abstractfs.afsbase):
                                       modify_time=sb.st_mtime)
 
     def exists(self, path):
+        logger.info("exists - %s" % path)
+
         with self._get_lock():
             ascii_path = path.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -189,6 +202,8 @@ class plugin_impl(abstractfs.afsbase):
             return exist
 
     def list_dir(self, dirpath):
+        logger.info("list_dir - %s" % dirpath)
+
         with self._get_lock():
             ascii_path = dirpath.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -196,6 +211,8 @@ class plugin_impl(abstractfs.afsbase):
             return l
 
     def is_dir(self, dirpath):
+        logger.info("is_dir - %s" % dirpath)
+
         with self._get_lock():
             ascii_path = dirpath.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -206,6 +223,8 @@ class plugin_impl(abstractfs.afsbase):
             return d
 
     def make_dirs(self, dirpath):
+        logger.info("make_dirs - %s" % dirpath)
+
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -213,6 +232,8 @@ class plugin_impl(abstractfs.afsbase):
                 os.makedirs(localfs_path)
 
     def read(self, filepath, offset, size):
+        logger.info("read - %s, %d, %d" % (filepath, offset, size))
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii','ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -222,6 +243,8 @@ class plugin_impl(abstractfs.afsbase):
             return buf
 
     def write(self, filepath, offset, buf):
+        logger.info("write - %s, %d, %d" % (filepath, offset, len(buf)))
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -231,6 +254,8 @@ class plugin_impl(abstractfs.afsbase):
             os.close(fd)
 
     def truncate(self, filepath, size):
+        logger.info("truncate - %s, %d" % (filepath, size))
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
@@ -238,13 +263,20 @@ class plugin_impl(abstractfs.afsbase):
             os.ftruncate(fd, size)
             os.close(fd)
 
+    def clear_cache(self, path):
+        logger.info("clear_cache - %s" % path)
+
     def unlink(self, filepath):
+        logger.info("unlink - %s" % filepath)
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             os.unlink(localfs_path)
 
     def rename(self, filepath1, filepath2):
+        logger.info("rename - %s to %s" % (filepath1, filepath2))
+
         with self._get_lock():
             ascii_path1 = filepath1.encode('ascii', 'ignore')
             ascii_path2 = filepath2.encode('ascii', 'ignore')
@@ -253,25 +285,28 @@ class plugin_impl(abstractfs.afsbase):
             os.rename(localfs_path1, localfs_path2)
 
     def set_xattr(self, filepath, key, value):
+        logger.info("set_xattr - %s, %s=%s" % (filepath, key, value))
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             xattr.setxattr(localfs_path, key, value)
 
     def get_xattr(self, filepath, key):
+        logger.info("get_xattr - %s, %s" % (filepath, key))
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             return xattr.getxattr(localfs_path, key)
 
     def list_xattr(self, filepath):
+        logger.info("list_xattr - %s" % filepath)
+
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             return xattr.listxattr(localfs_path)
-
-    def clear_cache(self, path):
-        pass
 
     def plugin(self):
         return self.__class__
@@ -280,4 +315,6 @@ class plugin_impl(abstractfs.afsbase):
         return self.role
 
     def set_notification_cb(self, notification_cb):
+        logger.info("set_notification_cb")
+
         self.notification_cb = notification_cb
