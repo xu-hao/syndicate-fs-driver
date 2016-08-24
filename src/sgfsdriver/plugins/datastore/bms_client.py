@@ -22,11 +22,24 @@ import json
 import string
 import random
 import threading
+import logging
 
 BMS_REGISTRATION_EXCHANGE = 'bms_registrations'
 BMS_REGISTRATION_QUEUE = 'bms_registrations'
 
 BMS_REREGISTRATION_SEC = 5*60
+BMS_RECONNECTION_SEC = 10
+
+logger = logging.getLogger('bms_client')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('bms_client.log')
+fh.setLevel(logging.DEBUG)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(fh)
 
 """
 Interface class to iPlant Border Message Server
@@ -106,6 +119,7 @@ class bms_client(object):
             self.appid = self._generateAppid()
 
         self.connection = None
+        self.reconnection_timer = None
         self.channel = None
         self.queue = None
         self.closing = False
@@ -172,7 +186,12 @@ class bms_client(object):
         if self.closing:
             self.connection.ioloop.stop()
         else:
-            self.connection.add_timeout(5, self.reconnect)
+            logger.info("connection is closed - reconnect after %d secs" % BMS_RECONNECTION_SEC)
+            if self.reconnection_timer:
+                self.reconnection_timer.cancel()
+
+            self.reconnection_timer = threading.Timer(BMS_RECONNECTION_SEC, self.reconnect)
+            self.reconnection_timer.start()
 
     def _onChannelOpen(self, channel):
         self.channel = channel
@@ -228,11 +247,24 @@ class bms_client(object):
                 self.on_message_callback(body)
 
     def reconnect(self):
+        logger.info("reconnect")
+
         if self.connection:
             self.connection.ioloop.stop()
 
         if not self.closing:
-            self.connect()
+            try:
+                logger.info("reconnect - connecting...")
+                self.connect()
+                logger.info("reconnect - connected")
+            except Exception as e:
+                logger.info("reconnect - failed to connect : " + str(e))
+                logger.info("reconnect after %d secs" % BMS_RECONNECTION_SEC)
+                if self.reconnection_timer:
+                    self.reconnection_timer.cancel()
+
+                self.reconnection_timer = threading.Timer(BMS_RECONNECTION_SEC, self.reconnect)
+                self.reconnection_timer.start()
 
     def close(self):
         self.closing = True
