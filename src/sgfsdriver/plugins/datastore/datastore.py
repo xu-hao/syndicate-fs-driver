@@ -276,6 +276,7 @@ class plugin_impl(abstractfs.afsbase):
                 self.bms.connect()
             except:
                 self.close()
+                raise IOError("connect: failed to connect to BMS")
 
     def close(self):
         logger.info("close")
