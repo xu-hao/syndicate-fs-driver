@@ -293,3 +293,31 @@ def delete_chunk( chunk_request, driver_config, driver_secrets ):
         gateway.log_error( traceback.format_exc() )
         return -errno.EIO
     return 0
+
+
+def rename_file( chunk_request, old_path, new_path, driver_config, driver_secrets ):
+    global fs
+    global block_replication
+
+    gateway.log_debug( "rename_file" )
+
+    from_path = gateway.request_path( chunk_request )
+    to_path = gateway.request_new_path( chunk_request )
+
+    gateway.log_debug( "rename hint: '%s' --> '%s'" % (from_path, to_path) )
+    try:
+        if block_replication:
+            # don't need to handle
+            pass
+        else:
+            from_file_path = gateway.path_join( "/", from_path )
+            to_file_path = gateway.path_join( "/", to_path )
+            if chunk_request.request_type == DriverRequest.BLOCK:
+                # use replication module to make the file consistent state
+                replica = replication.replica( fs, from_file_path, chunk_request.block_size )
+                replica.rename( to_file_path )
+
+    except Exception:
+        gateway.log_error( traceback.format_exc() )
+        return -errno.EIO
+    return 0

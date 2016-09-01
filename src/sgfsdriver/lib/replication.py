@@ -300,6 +300,19 @@ class replica(object):
                 # if log exists, clear log
                 self.log.clearLog()
 
+    def rename(self, new_path):
+        with self._getLock():
+            self.makeConsistent()
+            self._makeDirs(new_path)
+
+            if self.fs.exists(new_path):
+                # error
+                return False
+            else:
+                # rename
+                self.fs.rename(self.data_path, new_path)
+                return True
+
     def readBlock(self, block_id, block_version):
         with self._getLock():
             if self.fs.exists(self.data_path):
@@ -359,63 +372,3 @@ class replica(object):
     @classmethod
     def isLogPath(cls, path):
         return undo_log.isLogPath(path)
-
-
-"""
-Interface class to replication
-"""
-class replication(object):
-    def __init__(self, fs, chunk_size):
-        self.fs = fs
-        self.chunk_size = chunk_size
-        self.replicas = {}
-        self.lock = threading.RLock()
-
-        # load all replicas
-        self._loadAllReplica()
-        # make consistent
-        self.makeConsistent()
-
-    def _lock(self):
-        self.lock.acquire()
-
-    def _unlock(self):
-        self.lock.release()
-
-    def _getLock(self):
-        return self.lock
-
-    def getReplica(self, path):
-        with self._getLock():
-            if path not in self.replicas:
-                # create a new replica object
-                self.replicas[path] = replica(self.fs, path, self.chunk_size)
-
-            return self.replicas[path]
-
-    def _loadAllReplica(self):
-        with self._getLock():
-            replicas = {}
-            stack = ["/"]
-            while len(stack) > 0:
-                last_dir = stack.pop(0)
-                entries = fs.list_dir(last_dir)
-                for entry in entries:
-                    # entry is a filename
-                    entry_path = last_dir.rstrip("/") + "/" + entry
-
-                    # ignore undo-log
-                    if not replica.isLogPath(entry_path):
-                        st = fs.stat(entry_path)
-                        if st.directory:
-                            stack.append(entry_path)
-                        else:
-                            replicas[path] = replica(self.fs, entry_path, self.chunk_size)
-
-            self.replicas = replicas
-
-    def makeConsistent(self):
-        with self._getLock():
-            for key in self.replicas:
-                replica = self.replicas[key]
-                replica.makeConsistent()
