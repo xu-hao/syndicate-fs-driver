@@ -26,8 +26,6 @@ from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
 from irods.models import DataObject
 from irods.meta import iRODSMeta
 from expiringdict import ExpiringDict
-#from retrying import retry
-#from timeout_decorator import timeout
 
 logger = logging.getLogger('irods_client')
 logger.setLevel(logging.DEBUG)
@@ -40,17 +38,8 @@ fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 
-
-MAX_ATTEMPT = 3         # 3 retries
-ATTEMPT_INTERVAL = 5000 # 5 sec
-TIMEOUT_SECONDS = 20    # 20 sec
-
 METADATA_CACHE_SIZE = 1000
 METADATA_CACHE_TTL = 60 # 60 sec
-
-"""
-Timeout only works at a main thread.
-"""
 
 """
 Interface class to iRODS
@@ -154,7 +143,6 @@ class irods_client(object):
     """
     Returns irods_status
     """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def stat(self, path):
         parent = os.path.dirname(path)
         stats = self._ensureDirEntryStatLoaded(parent)
@@ -167,7 +155,6 @@ class irods_client(object):
     """
     Returns directory entries in string
     """
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def list_dir(self, path):
         stats = self._ensureDirEntryStatLoaded(path)
         entries = []
@@ -176,7 +163,6 @@ class irods_client(object):
                 entries.append(stat.name)
         return entries
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def is_dir(self, path):
         stat = self.stat(path)
         if stat:
@@ -191,7 +177,6 @@ class irods_client(object):
             # invalidate stat cache
             self.clear_stat_cache(os.path.dirname(path))
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def exists(self, path):
         stat = self.stat(path)
         if stat:
@@ -211,7 +196,6 @@ class irods_client(object):
         else:
             self.meta_cache.clear()
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def read(self, path, offset, size):
         logger.info("read : " + path + ", off(" + str(offset) + "), size(" + str(size) + ")")
         buf = None
@@ -362,7 +346,6 @@ class irods_client(object):
 
         return keys
 
-    #@retry(stop_max_attempt_number=MAX_ATTEMPT, wait_fixed=ATTEMPT_INTERVAL, wrap_exception=True)
     def download(self, path, to):
         obj = self.session.data_objects.get(path)
         with obj.open('r') as f:
