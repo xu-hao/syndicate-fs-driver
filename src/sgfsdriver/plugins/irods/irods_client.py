@@ -25,6 +25,7 @@ from irods.session import iRODSSession
 from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
 from irods.models import DataObject
 from irods.meta import iRODSMeta
+from irods.exception import CollectionDoesNotExist, DataObjectDoesNotExist
 from expiringdict import ExpiringDict
 
 logger = logging.getLogger('irods_client')
@@ -178,10 +179,13 @@ class irods_client(object):
             self.clear_stat_cache(os.path.dirname(path))
 
     def exists(self, path):
-        stat = self.stat(path)
-        if stat:
-            return True
-        return False
+        try:
+            stat = self.stat(path)
+            if stat:
+                return True
+            return False
+        except (CollectionDoesNotExist, DataObjectDoesNotExist):
+            return False
 
     def clear_stat_cache(self, path=None):
         if(path):
