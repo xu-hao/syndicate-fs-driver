@@ -174,6 +174,7 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
 
             # read
             buf = fs.read( file_path, 0,  chunk_request.block_size )
+            outfile.write( buf )
         else:
             # file_replication
             if chunk_request.request_type == DriverRequest.BLOCK:
@@ -187,6 +188,10 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
                 if not buf:
                     gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
                     return -errno.ENOENT
+                outfile.write( buf )
+                if len(buf) < chunk_request.block_size:
+                    # zero-padding
+                    outfile.write( bytearray(chunk_request.block_size - len(buf)) )
             elif chunk_request.request_type == DriverRequest.MANIFEST:
                 path = gateway.request_to_storage_path( chunk_request )
                 file_path = gateway.path_join( MANIFEST_DIR, path )
@@ -197,8 +202,7 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
 
                 # read
                 buf = fs.read( file_path, 0,  chunk_request.block_size )
-
-        outfile.write( buf )
+                outfile.write( buf )
     except Exception:
         gateway.log_error( traceback.format_exc() )
         return -errno.EIO
