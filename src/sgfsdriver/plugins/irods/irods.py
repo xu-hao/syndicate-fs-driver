@@ -24,7 +24,7 @@ import time
 import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.plugins.datastore.irods_client as irods_client
+import sgfsdriver.plugins.irods.irods_client as irods_client
 
 logger = logging.getLogger('syndicate_iRODS_filesystem')
 logger.setLevel(logging.DEBUG)
