@@ -47,7 +47,7 @@ class pluginloader(object):
 
     def findModule(self, plugin_name=None):
         module_dir = os.path.dirname(os.path.abspath(__file__))
-        module_path = os.path.abspath(module_dir + "/../plugins/" + plugin_name + "/" + plugin_name + ".py")
+        module_path = os.path.abspath(module_dir + "/../plugins/" + plugin_name + "/" + plugin_name + "_plugin.py")
 
         if os.path.exists(module_path):
             return imp.load_source(plugin_name,
@@ -64,5 +64,3 @@ class pluginloader(object):
                 raise PluginNotExist("unable to find a plugin for %s" % plugin_name)
         else:
             raise PluginLoaderError("a plugin name is not given")
-
-
