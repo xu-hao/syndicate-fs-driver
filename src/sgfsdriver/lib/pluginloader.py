@@ -50,7 +50,7 @@ class pluginloader(object):
         module_path = os.path.abspath(module_dir + "/../plugins/" + plugin_name + "/" + plugin_name + "_plugin.py")
 
         if os.path.exists(module_path):
-            return imp.load_source(plugin_name,
+            return imp.load_source(plugin_name + "_plugin",
                                    module_path)
         else:
             return None
