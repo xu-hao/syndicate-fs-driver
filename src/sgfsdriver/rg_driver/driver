@@ -129,8 +129,11 @@ def driver_init( driver_config, driver_secrets ):
         return False
 
     if not fs.exists( "/" ):
-        gateway.log_error( "No such file or directory: %s" % storage_dir )
-        return False
+        # try to create it
+        fs.make_dirs( "/" )
+        if not fs.exists( "/" ):
+            gateway.log_error( "No such file or directory: %s" % storage_dir )
+            return False
 
     if not fs.is_dir( "/" ):
         gateway.log_error( "Not a directory: %s" % storage_dir )
