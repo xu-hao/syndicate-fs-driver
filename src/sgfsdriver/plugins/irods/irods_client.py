@@ -145,13 +145,24 @@ class irods_client(object):
     Returns irods_status
     """
     def stat(self, path):
-        parent = os.path.dirname(path)
-        stats = self._ensureDirEntryStatLoaded(parent)
-        if stats:
-            for stat in stats:
-                if stat.path == path:
-                    return stat
-        return None
+        try:
+            # try bulk loading of stats
+            parent = os.path.dirname(path)
+            stats = self._ensureDirEntryStatLoaded(parent)
+            if stats:
+                for stat in stats:
+                    if stat.path == path:
+                        return stat
+            return None
+        except (CollectionDoesNotExist):
+            # fall if cannot access the parent dir
+            try:
+                # we only need to check the case if the path is a collection
+                # because if it is a file, it's parent dir must be accessible
+                # thus, _ensureDirEntryStatLoaded should succeed.
+                return irods_status.fromCollection(self.session.collections.get(path))
+            except (CollectionDoesNotExist):
+                return None
 
     """
     Returns directory entries in string
