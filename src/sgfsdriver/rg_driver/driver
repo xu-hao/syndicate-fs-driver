@@ -192,9 +192,11 @@ def read_chunk( chunk_request, outfile, driver_config, driver_secrets ):
                     gateway.log_error("WARN: block %d of '%s' does not exist" % ( chunk_request.block_id, file_path ) )
                     return -errno.ENOENT
                 outfile.write( buf )
+                """
                 if len(buf) < chunk_request.block_size:
                     # zero-padding
                     outfile.write( bytearray(chunk_request.block_size - len(buf)) )
+                """
             elif chunk_request.request_type == DriverRequest.MANIFEST:
                 path = gateway.request_to_storage_path( chunk_request )
                 file_path = gateway.path_join( MANIFEST_DIR, path )
