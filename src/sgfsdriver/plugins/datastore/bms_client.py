@@ -36,7 +36,8 @@ logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('bms_client.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
@@ -44,23 +45,31 @@ logger.addHandler(fh)
 """
 Interface class to iPlant Border Message Server
 """
+
+
 class bms_registration_result_client(object):
-    def __init__(self, user_id=None,
-                       application_name=None):
+    def __init__(self,
+                 user_id=None,
+                 application_name=None):
         self.user_id = user_id
         self.application_name = application_name
 
     @classmethod
     def fromDict(cls, dictionary):
-        return bms_registration_result_client(dictionary['user_id'], dictionary['application_name'])
+        return bms_registration_result_client(
+            dictionary['user_id'],
+            dictionary['application_name'])
 
     def __repr__(self):
-        return "<bms_registration_result_client %s %s>" % (self.user_id, self.application_name)
+        return "<bms_registration_result_client %s %s>" %
+        (self.user_id, self.application_name)
+
 
 class bms_registration_result(object):
-    def __init__(self, client=None,
-                       lease_start=0,
-                       lease_expire=0):
+    def __init__(self,
+                 client=None,
+                 lease_start=0,
+                 lease_expire=0):
         self.client = client
         self.lease_start = lease_start
         self.lease_expire = lease_expire
@@ -69,9 +78,10 @@ class bms_registration_result(object):
     def fromJson(cls, json_string):
         if bms_registration_result.isRegistrationJson(json_string):
             msg = json.loads(json_string)
-            return bms_registration_result(client=bms_registration_result_client.fromDict(msg['client']),
-                                lease_start=msg['lease_start'],
-                                lease_expire=msg['lease_expire'])
+            return bms_registration_result(
+                client=bms_registration_result_client.fromDict(msg['client']),
+                lease_start=msg['lease_start'],
+                lease_expire=msg['lease_expire'])
         else:
             return None
 
@@ -79,16 +89,21 @@ class bms_registration_result(object):
     def isRegistrationJson(cls, json_string):
         if json_string and len(json_string) > 0:
             msg = json.loads(json_string)
-            if ('client' in msg) and ('lease_start' in msg) and ('lease_expire' in msg):
+            if ('client' in msg) and
+            ('lease_start' in msg) and
+            ('lease_expire' in msg):
                 return True
         return False
 
     def __repr__(self):
-        return "<bms_registration_result %s %d %d>" % (self.client, self.lease_start, self.lease_expire)
+        return "<bms_registration_result %s %d %d>" %
+        (self.client, self.lease_start, self.lease_expire)
+
 
 class bms_message_acceptor(object):
-    def __init__(self, acceptor="path",
-                       pattern="*"):
+    def __init__(self,
+                 acceptor="path",
+                 pattern="*"):
         self.acceptor = acceptor
         self.pattern = pattern
 
@@ -96,18 +111,20 @@ class bms_message_acceptor(object):
         return self.__dict__
 
     def __repr__(self):
-        return "<bms_message_acceptor %s %s>" % (self.acceptor, self.pattern)
+        return "<bms_message_acceptor %s %s>" %
+        (self.acceptor, self.pattern)
+
 
 class bms_client(object):
-    def __init__(self, host=None,
-                       port=31333,
-                       vhost="/",
-                       user=None,
-                       password=None,
-                       appid=None,
-                       auto_reregistration=True,
-                       acceptors=None
-                       ):
+    def __init__(self,
+                 host=None,
+                 port=31333,
+                 vhost="/",
+                 user=None,
+                 password=None,
+                 appid=None,
+                 auto_reregistration=True,
+                 acceptors=None):
         self.host = host
         self.port = port
         self.vhost = vhost
@@ -134,7 +151,10 @@ class bms_client(object):
         self.on_register_callback = None
         self.on_message_callback = None
 
-    def setCallbacks(self, on_connect_callback=None, on_register_callback=None, on_message_callback=None):
+    def setCallbacks(self,
+                     on_connect_callback=None,
+                     on_register_callback=None,
+                     on_message_callback=None):
         if on_connect_callback:
             self.on_connect_callback = on_connect_callback
         if on_register_callback:
@@ -154,7 +174,9 @@ class bms_client(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-    def _generateId(self, size=8, chars=string.ascii_uppercase + string.digits):
+    def _generateId(self,
+                    size=8,
+                    chars=string.ascii_uppercase + string.digits):
         return ''.join(random.choice(chars) for _ in range(size))
 
     def _generateAppid(self):
@@ -164,16 +186,20 @@ class bms_client(object):
         self.connection.ioloop.start()
 
     def connect(self):
-        credentials = pika.PlainCredentials(self.user,
-                                            self.password)
-        parameters = pika.ConnectionParameters(self.host,
-                                               self.port,
-                                               self.vhost,
-                                               credentials)
-        self.connection = pika.SelectConnection(parameters,
-                                                self._onConnectionOpen,
-                                                stop_ioloop_on_close=False)
-        self.consumer_thread = threading.Thread(target=self._consumerThreadTask)
+        credentials = pika.PlainCredentials(
+            self.user,
+            self.password)
+        parameters = pika.ConnectionParameters(
+            self.host,
+            self.port,
+            self.vhost,
+            credentials)
+        self.connection = pika.SelectConnection(
+            parameters,
+            self._onConnectionOpen,
+            stop_ioloop_on_close=False)
+        self.consumer_thread = threading.Thread(
+            target=self._consumerThreadTask)
         self.consumer_thread.start()
 
     def _onConnectionOpen(self, connection):
@@ -186,11 +212,15 @@ class bms_client(object):
         if self.closing:
             self.connection.ioloop.stop()
         else:
-            logger.info("connection is closed - reconnect after %d secs" % BMS_RECONNECTION_SEC)
+            logger.info(
+                "connection is closed - reconnect after %d secs" %
+                BMS_RECONNECTION_SEC)
             if self.reconnection_timer:
                 self.reconnection_timer.cancel()
 
-            self.reconnection_timer = threading.Timer(BMS_RECONNECTION_SEC, self.reconnect)
+            self.reconnection_timer = threading.Timer(
+                BMS_RECONNECTION_SEC,
+                self.reconnect)
             self.reconnection_timer.start()
 
     def _onChannelOpen(self, channel):
@@ -199,18 +229,20 @@ class bms_client(object):
 
         # declare a queue
         self.queue = self.user + "/" + self.appid
-        self.channel.queue_declare(self._onQueueDeclareok,
-                                   queue=self.queue,
-                                   durable=False,
-                                   exclusive=False,
-                                   auto_delete=True)
+        self.channel.queue_declare(
+            self._onQueueDeclareok,
+            queue=self.queue,
+            durable=False,
+            exclusive=False,
+            auto_delete=True)
 
     def _onQueueDeclareok(self, mothod_frame):
         # set consumer
         self.channel.add_on_cancel_callback(self._onConsumerCancelled)
-        self.consumer_tag = self.channel.basic_consume(self._onMessage,
-                                                       queue=self.queue,
-                                                       no_ack=False)
+        self.consumer_tag = self.channel.basic_consume(
+            self._onMessage,
+            queue=self.queue,
+            no_ack=False)
 
         # call callback
         if self.on_connect_callback:
@@ -241,7 +273,8 @@ class bms_client(object):
         # check if a message is registration message
         if bms_registration_result.isRegistrationJson(body):
             if self.on_register_callback:
-                self.on_register_callback(bms_registration_result.fromJson(body))
+                self.on_register_callback(
+                    bms_registration_result.fromJson(body))
         else:
             if self.on_message_callback:
                 self.on_message_callback(body)
@@ -263,7 +296,9 @@ class bms_client(object):
                 if self.reconnection_timer:
                     self.reconnection_timer.cancel()
 
-                self.reconnection_timer = threading.Timer(BMS_RECONNECTION_SEC, self.reconnect)
+                self.reconnection_timer = threading.Timer(
+                    BMS_RECONNECTION_SEC,
+                    self.reconnect)
                 self.reconnection_timer.start()
 
     def close(self):
@@ -293,16 +328,19 @@ class bms_client(object):
         prop = pika.BasicProperties(reply_to=self.queue)
 
         # request a registration
-        self.channel.basic_publish(exchange=BMS_REGISTRATION_EXCHANGE,
-                                   routing_key=BMS_REGISTRATION_QUEUE,
-                                   properties=prop,
-                                   body=msg)
+        self.channel.basic_publish(
+            exchange=BMS_REGISTRATION_EXCHANGE,
+            routing_key=BMS_REGISTRATION_QUEUE,
+            properties=prop,
+            body=msg)
 
         if self.registration_timer:
             self.registration_timer.cancel()
 
         if self.auto_reregistration:
-            self.registration_timer = threading.Timer(BMS_REREGISTRATION_SEC, self.reRegister)
+            self.registration_timer = threading.Timer(
+                BMS_REREGISTRATION_SEC,
+                self.reRegister)
             self.registration_timer.start()
 
     def register(self, acceptors):
@@ -319,9 +357,9 @@ class bms_client(object):
             acceptor_arr.append(acceptor.asDict())
 
         reg_msg = {"request": "lease",
-                    "client": {"user_id": self.user,
-                                "application_name": self.appid},
-                    "acceptors": acceptor_arr}
+                   "client": {"user_id": self.user,
+                              "application_name": self.appid},
+                   "acceptors": acceptor_arr}
         reg_msg_str = json.dumps(reg_msg)
 
         self._registerByString(reg_msg_str)

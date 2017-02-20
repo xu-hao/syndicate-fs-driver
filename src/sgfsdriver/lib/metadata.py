@@ -28,12 +28,13 @@ import sgfsdriver.lib.abstractfs as abstractfs
 def get_current_time():
     return int(round(time.time() * 1000))
 
-"""
-Database
-"""
+
 class dbmanager(object):
+    """
+    Database
+    """
     def __init__(self, dbpath="datasetmeta.db"):
-        self.db_path = dbpath;
+        self.db_path = dbpath
         self.db_conn = sqlite3.connect(dbpath, check_same_thread=False)
         self.lock = threading.RLock()
         self.createTable()
@@ -48,13 +49,14 @@ class dbmanager(object):
         self._lock()
         db_cursor = self.db_conn.cursor()
         # create a table if not exist
-        db_cursor.execute("CREATE TABLE IF NOT EXISTS tbl_dataset( \
-                                                         path VARCHAR NOT NULL, \
-                                                         filename VARCHAR NOT NULL, \
-                                                         status VARCHAR NOT NULL, \
-                                                         registered_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
-                                                         PRIMARY KEY (path, filename) \
-                                                         );")
+        db_cursor.execute(
+            "CREATE TABLE IF NOT EXISTS tbl_dataset( "
+            "path VARCHAR NOT NULL, "
+            "filename VARCHAR NOT NULL, "
+            "status VARCHAR NOT NULL, "
+            "registered_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "PRIMARY KEY (path, filename) "
+            ");")
         self.db_conn.commit()
         self._unlock()
 
@@ -68,21 +70,30 @@ class dbmanager(object):
     def insertEntry(self, path, filename, status):
         self._lock()
         db_cursor = self.db_conn.cursor()
-        db_cursor.execute("INSERT INTO tbl_dataset(path, filename, status) values (?, ?, ?)", (path, filename, status.toJson(),))
+        db_cursor.execute(
+            "INSERT INTO tbl_dataset(path, filename, status) "
+            "values (?, ?, ?)",
+            (path, filename, status.toJson(),))
         self.db_conn.commit()
         self._unlock()
 
     def updateEntry(self, path, filename, status):
         self._lock()
         db_cursor = self.db_conn.cursor()
-        db_cursor.execute("UPDATE tbl_dataset SET status=?, registered_time=CURRENT_TIMESTAMP WHERE path=? AND filename=?", (status.toJson(), path, filename,))
+        db_cursor.execute(
+            "UPDATE tbl_dataset SET status=?, "
+            "registered_time=CURRENT_TIMESTAMP "
+            "WHERE path=? AND filename=?",
+            (status.toJson(), path, filename,))
         self.db_conn.commit()
         self._unlock()
 
     def deleteEntry(self, path, filename):
         self._lock()
         db_cursor = self.db_conn.cursor()
-        db_cursor.execute("DELETE FROM tbl_dataset WHERE path=? AND filename=?", (path, filename,))
+        db_cursor.execute(
+            "DELETE FROM tbl_dataset WHERE path=? AND filename=?",
+            (path, filename,))
         self.db_conn.commit()
         self._unlock()
 
@@ -90,21 +101,26 @@ class dbmanager(object):
         self._lock()
         db_cursor = self.db_conn.cursor()
         entries = []
-        for row_path, row_filename, row_status, row_registered_time in db_cursor.execute("SELECT * FROM tbl_dataset WHERE path=? ORDER BY filename", (path,)):
-            entry = {"path": row_path, "filename": row_filename, "status": abstractfs.afsstat.fromJson(row_status),
+        query_string = "SELECT * FROM tbl_dataset \
+                        WHERE path=? ORDER BY filename"
+        for row_path, row_filename, row_status, row_registered_time
+        in db_cursor.execute(query_string, (path,)):
+            entry = {"path": row_path,
+                     "filename": row_filename,
+                     "status": abstractfs.afsstat.fromJson(row_status),
                      "registered_time": row_registered_time}
             entries.append(entry)
 
         self._unlock()
         return entries
-        
 
-"""
-Interface class to datasetmeta
-"""
+
 class datasetmeta(object):
-    def __init__(self, root_path="/", 
-                       update_event_handler=None, request_for_update_handler=None):
+    """
+    Interface class to datasetmeta
+    """
+    def __init__(self, root_path="/",
+                 update_event_handler=None, request_for_update_handler=None):
         self.root_path = root_path
         self.dbmanager = dbmanager()
         self.lock = threading.RLock()
@@ -131,13 +147,17 @@ class datasetmeta(object):
         if self.request_for_update_handler:
             self.request_for_update_handler(directory)
 
-    def _onDirectoryUpdate(self, updated_entries, added_entries, removed_entries):
+    def _onDirectoryUpdate(self,
+                           updated_entries, added_entries, removed_entries):
         if (len(updated_entries) > 0) or \
            (len(added_entries) > 0) or \
            (len(removed_entries) > 0):
             # if any of these are not empty
             if self.update_event_handler:
-                self.update_event_handler(updated_entries, added_entries, removed_entries)
+                self.update_event_handler(
+                    updated_entries,
+                    added_entries,
+                    removed_entries)
 
         # for subdirectories
         if added_entries:
@@ -163,7 +183,7 @@ class datasetmeta(object):
             new_entries = {}
             for entry in entries:
                 new_entries[entry.name] = entry
-                
+
             set_prev = set(old_entries.keys())
             set_new = set(new_entries.keys())
 
@@ -202,21 +222,31 @@ class datasetmeta(object):
             # if directory is removed
             for removed_entry in removed_entries:
                 if removed_entry.directory:
-                    removed_subdir = self._getStatsRecursive(removed_entry.path)
+                    removed_subdir = self._getStatsRecursive(
+                        removed_entry.path)
                     for removed_subdir_entry in removed_subdir:
                         removed_entries.append(removed_subdir_entry)
 
             # apply to dataset
             for entry in removed_entries:
-                self.dbmanager.deleteEntry(os.path.dirname(entry.path), entry.name)
+                self.dbmanager.deleteEntry(
+                    os.path.dirname(entry.path),
+                    entry.name)
 
             for entry in updated_entries:
-                self.dbmanager.updateEntry(os.path.dirname(entry.path), entry.name, entry)
+                self.dbmanager.updateEntry(
+                    os.path.dirname(entry.path),
+                    entry.name, entry)
 
             for entry in added_entries:
-                self.dbmanager.insertEntry(os.path.dirname(entry.path), entry.name, entry)
+                self.dbmanager.insertEntry(
+                    os.path.dirname(entry.path),
+                    entry.name, entry)
 
-            self._onDirectoryUpdate(updated_entries, added_entries, removed_entries)
+            self._onDirectoryUpdate(
+                updated_entries,
+                added_entries,
+                removed_entries)
 
     def getDirectory(self, path):
         with self.lock:
@@ -235,7 +265,7 @@ class datasetmeta(object):
             for dirpath in dirs:
                 for sub_entry in self._getStatsRecursive(dirpath):
                     entries.append(sub_entry)
-        return entries        
+        return entries
 
     def walk(self):
         entries = []
@@ -243,4 +273,3 @@ class datasetmeta(object):
             for entry in self._getStatsRecursive(self.root_path):
                 entries.append(entry)
         return entries
-

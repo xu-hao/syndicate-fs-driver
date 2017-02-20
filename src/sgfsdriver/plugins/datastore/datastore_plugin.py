@@ -34,10 +34,12 @@ logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('syndicate_datastore_filesystem.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
+
 
 class BMSEventHandler(object):
     def __init__(self, plugin, work_root):
@@ -61,7 +63,7 @@ class BMSEventHandler(object):
             return
 
         # convert to ascii
-        operation = operation.encode('ascii','ignore')
+        operation = operation.encode('ascii', 'ignore')
 
         if operation in ["collection.add", "data-object.add"]:
             path = msg.get("path")
@@ -69,7 +71,7 @@ class BMSEventHandler(object):
                 logger.info("Empty path for operation %s" % operation)
                 return
 
-            path = path.encode('ascii','ignore')
+            path = path.encode('ascii', 'ignore')
             if not path.startswith(self.work_root):
                 return
 
@@ -82,7 +84,7 @@ class BMSEventHandler(object):
                 logger.info("Empty path for operation %s" % operation)
                 return
 
-            path = path.encode('ascii','ignore')
+            path = path.encode('ascii', 'ignore')
             if not path.startswith(self.work_root):
                 return
 
@@ -94,7 +96,7 @@ class BMSEventHandler(object):
                 logger.info("Empty path for operation %s" % operation)
                 return
 
-            path = path.encode('ascii','ignore')
+            path = path.encode('ascii', 'ignore')
             if not path.startswith(self.work_root):
                 return
 
@@ -106,7 +108,7 @@ class BMSEventHandler(object):
                 logger.info("Empty old-path for operation %s" % operation)
                 return
 
-            old_path = old_path.encode('ascii','ignore')
+            old_path = old_path.encode('ascii', 'ignore')
             if old_path.startswith(self.work_root):
                 logger.info("Moving a file from : %s" % old_path)
                 self.plugin.on_update_detected("remove", old_path)
@@ -116,13 +118,14 @@ class BMSEventHandler(object):
                 logger.info("Empty new-path for operation %s" % operation)
                 return
 
-            new_path = new_path.encode('ascii','ignore')
+            new_path = new_path.encode('ascii', 'ignore')
             if new_path.startswith(self.work_root):
                 logger.info("Moving a file to : %s" % new_path)
                 self.plugin.on_update_detected("create", new_path)
         else:
             logger.info("Unhandled operation to a file : %s" % operation)
             logger.info("- %s" % msg)
+
 
 def reconnectAtIRODSFail(func):
     def wrap(self, *args, **kwargs):
@@ -137,6 +140,7 @@ def reconnectAtIRODSFail(func):
                 return func(self, *args, **kwargs)
 
     return wrap
+
 
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
@@ -154,12 +158,12 @@ class plugin_impl(abstractfs.afsbase):
             raise ValueError("secrets are not given correctly")
 
         user = secrets.get("user")
-        user = user.encode('ascii','ignore')
+        user = user.encode('ascii', 'ignore')
         if not user:
             raise ValueError("user is not given correctly")
 
         password = secrets.get("password")
-        password = password.encode('ascii','ignore')
+        password = password.encode('ascii', 'ignore')
         if not password:
             raise ValueError("password is not given correctly")
 
@@ -177,18 +181,19 @@ class plugin_impl(abstractfs.afsbase):
         self.role = role
 
         # config can have unicode strings
-        work_root = work_root.encode('ascii','ignore')
+        work_root = work_root.encode('ascii', 'ignore')
         self.work_root = work_root.rstrip("/")
 
         self.irods_config = irods_config
         self.bms_config = bms_config
 
         # init irods client
-        # we convert unicode (maybe) strings to ascii since python-irodsclient cannot accept unicode strings
+        # we convert unicode (maybe) strings to ascii
+        # since python-irodsclient cannot accept unicode strings
         irods_host = self.irods_config["host"]
-        irods_host = irods_host.encode('ascii','ignore')
+        irods_host = irods_host.encode('ascii', 'ignore')
         irods_zone = self.irods_config["zone"]
-        irods_zone = irods_zone.encode('ascii','ignore')
+        irods_zone = irods_zone.encode('ascii', 'ignore')
 
         logger.info("__init__: initializing irods_client")
         self.irods = irods_client.irods_client(host=irods_host,
@@ -213,7 +218,8 @@ class plugin_impl(abstractfs.afsbase):
                                              acceptors=[acceptor])
 
             self.notify_handler = BMSEventHandler(self, self.work_root)
-            self.bms.setCallbacks(on_message_callback=self.notify_handler.MessageHandler)
+            self.bms.setCallbacks(
+                on_message_callback=self.notify_handler.MessageHandler)
 
         self.notification_cb = None
         # create a re-entrant lock (not a read lock)
@@ -231,7 +237,7 @@ class plugin_impl(abstractfs.afsbase):
     def on_update_detected(self, operation, path):
         logger.info("on_update_detected - %s, %s" % (operation, path))
 
-        ascii_path = path.encode('ascii','ignore')
+        ascii_path = path.encode('ascii', 'ignore')
         driver_path = self._make_driver_path(ascii_path)
 
         self.clear_cache(driver_path)
@@ -295,7 +301,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("stat - %s" % path)
 
         with self._get_lock():
-            ascii_path = path.encode('ascii','ignore')
+            ascii_path = path.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             driver_path = self._make_driver_path(ascii_path)
             # get stat
@@ -313,7 +319,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("exists - %s" % path)
 
         with self._get_lock():
-            ascii_path = path.encode('ascii','ignore')
+            ascii_path = path.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             exist = self.irods.exists(irods_path)
             return exist
@@ -323,7 +329,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("list_dir - %s" % dirpath)
 
         with self._get_lock():
-            ascii_path = dirpath.encode('ascii','ignore')
+            ascii_path = dirpath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             l = self.irods.list_dir(irods_path)
             return l
@@ -333,7 +339,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("is_dir - %s" % dirpath)
 
         with self._get_lock():
-            ascii_path = dirpath.encode('ascii','ignore')
+            ascii_path = dirpath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             d = self.irods.is_dir(irods_path)
             return d
@@ -353,7 +359,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("read - %s, %d, %d" % (filepath, offset, size))
 
         with self._get_lock():
-            ascii_path = filepath.encode('ascii','ignore')
+            ascii_path = filepath.encode('ascii', 'ignore')
             irods_path = self._make_irods_path(ascii_path)
             buf = self.irods.read(irods_path, offset, size)
             return buf

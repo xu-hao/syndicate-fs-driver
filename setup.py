@@ -45,9 +45,9 @@ setup(name='sgfsdriver',
       author='Illyoung Choi',
       author_email='syndicate@lists.cs.princeton.edu',
       license='Apache 2.0',
-      packages = packages,
-      package_dir = {
+      packages=packages,
+      package_dir={
                   'sgfsdriver': 'src/sgfsdriver'
       },
-      install_requires = dependencies,
+      install_requires=dependencies,
       zip_safe=False)

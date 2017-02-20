@@ -27,6 +27,8 @@ import sgfsdriver.lib.abstractfs as abstractfs
 """
 undo-log class
 """
+
+
 class undo_log_block(object):
     def __init__(self, block_id, block_data, block_version, block_size):
         self.block_id = block_id
@@ -55,7 +57,8 @@ class undo_log_block(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log_block %d %d %d>" % (self.block_id, self.block_version, self.block_size)
+        return "<undo_log_block %d %d %d>" %
+        (self.block_id, self.block_version, self.block_size)
 
 
 class undo_log(object):
@@ -83,7 +86,11 @@ class undo_log(object):
         self.log = None
 
     def write(self, block_id, block_data, block_version, block_size):
-        self.log = undo_log_block(block_id, block_data, block_version, block_size)
+        self.log = undo_log_block(
+            block_id,
+            block_data,
+            block_version,
+            block_size)
         self.fs.write(self.log_path, 0, self.log.toBinary())
 
     def read(self):
@@ -99,7 +106,9 @@ class undo_log(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log %s %s %s>" % (self.data_path, self.log_path, self.log)
+        return "<undo_log %s %s %s>" %
+        (self.data_path, self.log_path, self.log)
+
 
 class block_meta(object):
     def __init__(self, block_refer_log, block_version, block_size):
@@ -108,7 +117,8 @@ class block_meta(object):
         self.block_size = block_size
 
     def toString(self):
-        return "%d|%d|%d" % (self.block_refer_log, self.block_version, self.block_size)
+        return "%d|%d|%d" %
+        (self.block_refer_log, self.block_version, self.block_size)
 
     @classmethod
     def fromString(cls, s):
@@ -119,7 +129,9 @@ class block_meta(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<block_meta %d %d %d>" % (self.block_refer_log, self.block_version, self.block_size)
+        return "<block_meta %d %d %d>" %
+        (self.block_refer_log, self.block_version, self.block_size)
+
 
 class file_meta(object):
     def __init__(self, block_meta_arr=[]):
@@ -135,7 +147,7 @@ class file_meta(object):
         else:
             # zero fill
             for i in range(0, size - len(self.block_meta_arr)):
-                self.block_meta_arr.append(block_meta(0,0,0))
+                self.block_meta_arr.append(block_meta(0, 0, 0))
 
     def set(self, block_id, block_refer_log, block_version, block_size):
         if len(self.block_meta_arr) > block_id:
@@ -145,7 +157,7 @@ class file_meta(object):
         else:
             # zero fill
             for i in range(0, block_id - len(self.block_meta_arr) + 1):
-                self.block_meta_arr.append(block_meta(0,0,0))
+                self.block_meta_arr.append(block_meta(0, 0, 0))
 
             self.block_meta_arr[block_id].block_refer_log = block_refer_log
             self.block_meta_arr[block_id].block_version = block_version
@@ -155,7 +167,7 @@ class file_meta(object):
         if len(self.block_meta_arr) > block_id:
             return self.block_meta_arr[block_id]
         else:
-            return block_meta(0,0,0)
+            return block_meta(0, 0, 0)
 
     def toString(self):
         s = ""
@@ -181,6 +193,7 @@ class file_meta(object):
 
     def __repr__(self):
         return "<file_meta %s>" % (self.block_meta_arr)
+
 
 class replica(object):
     REPLICA_INCOMPLETE_SUFFIX = ".part"
@@ -220,9 +233,11 @@ class replica(object):
 
     def beginTransaction(self):
         with self._getLock():
-            # need to check file existance because the file may not exist if there's no replicated blocks
+            # need to check file existance
+            # because the file may not exist if there's no replicated blocks
             if self.fs.exists(self.data_path):
-                self.fs.rename(self.data_path, self._makeIncompletePath(self.data_path))
+                self.fs.rename(
+                    self.data_path, self._makeIncompletePath(self.data_path))
 
     def commit(self):
         with self._getLock():
@@ -237,12 +252,21 @@ class replica(object):
             log_data = self.log.read()
             if log_data:
                 # step1: copy old block back
-                self._writeBlockToDataFile(incomplete_path, log_data.block_id, log_data.block_data)
+                self._writeBlockToDataFile(
+                    incomplete_path,
+                    log_data.block_id,
+                    log_data.block_data)
 
                 # step2: copy old version back
                 block_info = self._readBlockInfoFromDataFile(incomplete_path)
-                block_info.set(log_data.block_id, 0, log_data.block_version, log_data.block_size)
-                self._writeBlockInfoToDataFile(incomplete_path, block_info)
+                block_info.set(
+                    log_data.block_id,
+                    0,
+                    log_data.block_version,
+                    log_data.block_size)
+                self._writeBlockInfoToDataFile(
+                    incomplete_path,
+                    block_info)
 
                 # step3: remove log
                 self.log.clearLog()
@@ -264,9 +288,16 @@ class replica(object):
                 block_meta = block_info.get(block_id)
 
                 if block_meta.block_version != 0:
-                    old_block_data = self._readBlockFromDataFile(self.data_path, block_id, block_meta.block_size)
+                    old_block_data = self._readBlockFromDataFile(
+                        self.data_path,
+                        block_id,
+                        block_meta.block_size)
                     # copy to log
-                    self.log.write(block_id, old_block_data, block_meta.block_version, block_meta.block_size)
+                    self.log.write(
+                        block_id,
+                        old_block_data,
+                        block_meta.block_version,
+                        block_meta.block_size)
 
                 fresh_file = False
 
@@ -276,7 +307,11 @@ class replica(object):
 
             # step3: make the block refer log
             block_meta = block_info.get(block_id)
-            block_info.set(block_id, 1, block_meta.block_version, block_meta.block_size)
+            block_info.set(
+                block_id,
+                1,
+                block_meta.block_version,
+                block_meta.block_size)
 
             if not fresh_file:
                 self._writeBlockInfoToDataFile(incomplete_path, block_info)
@@ -319,7 +354,10 @@ class replica(object):
                 block_info = self._readBlockInfoFromDataFile(self.data_path)
                 block_meta = block_info.get(block_id)
                 if block_meta.block_version == block_version:
-                    block_data = self.fs.read(self.data_path, block_id * self.chunk_size, block_meta.block_size)
+                    block_data = self.fs.read(
+                        self.data_path,
+                        block_id * self.chunk_size,
+                        block_meta.block_size)
                     return block_data
             return None
 
@@ -343,24 +381,36 @@ class replica(object):
                         self.fs.unlink(self.data_path)
                     else:
                         block_meta = block_info.get(last_live_block_id)
-                        self._writeBlockInfoToDataFile(self.data_path, block_info)
-                        self.fs.truncate(self.data_path, last_live_block_id * self.chunk_size + block_meta.block_size)
+                        self._writeBlockInfoToDataFile(
+                            self.data_path,
+                            block_info)
+                        self.fs.truncate(
+                            self.data_path,
+                            (last_live_block_id * self.chunk_size
+                                + block_meta.block_size))
 
                     return True
             return False
 
     def _readBlockFromDataFile(self, path, block_id, block_size):
         with self._getLock():
-            block_data = self.fs.read(path, block_id * self.chunk_size, block_size)
+            block_data = self.fs.read(
+                path,
+                block_id * self.chunk_size,
+                block_size)
             return block_data
 
     def _writeBlockToDataFile(self, path, block_id, block_data):
         with self._getLock():
-            self.fs.write(path, block_id * self.chunk_size, block_data)
+            self.fs.write(
+                path,
+                block_id * self.chunk_size, block_data)
 
     def _readBlockInfoFromDataFile(self, path):
         with self._getLock():
-            block_info_xattr = self.fs.get_xattr(path, self.REPLICA_BLOCK_INFO_XATTR_KEY)
+            block_info_xattr = self.fs.get_xattr(
+                path,
+                self.REPLICA_BLOCK_INFO_XATTR_KEY)
             block_info = file_meta.fromString(block_info_xattr)
             return block_info
 

@@ -24,12 +24,15 @@ import sgfsdriver.lib.abstractfs as abstractfs
 """
 Exceptions
 """
+
+
 class PluginNotExist(Exception):
     def __init__(self, value):
         self.value = value
 
     def __str__(self):
         return repr(self.value)
+
 
 class PluginLoaderError(Exception):
     def __init__(self, value):
@@ -38,29 +41,37 @@ class PluginLoaderError(Exception):
     def __str__(self):
         return repr(self.value)
 
-"""
-Find a plugin and create an instance
-"""
+
 class pluginloader(object):
+    """
+    Find a plugin and create an instance
+    """
     def __init__(self):
         pass
 
     def findModule(self, plugin_name=None):
         module_dir = os.path.dirname(os.path.abspath(__file__))
-        module_path = os.path.abspath(module_dir + "/../plugins/" + plugin_name + "/" + plugin_name + "_plugin.py")
+        module_path = os.path.abspath(
+            "%s/../plugins/%s/%s_plugin.py" %
+            (module_dir, plugin_name, plugin_name))
 
         if os.path.exists(module_path):
-            return imp.load_source(plugin_name + "_plugin",
-                                   module_path)
+            return imp.load_source(
+                "%s_plugin" %
+                (plugin_name),
+                module_path)      
         else:
             return None
 
-    def load(self, plugin_name=None, plugin_config=None, role=abstractfs.afsrole.DISCOVER):
+    def load(self, plugin_name=None, plugin_config=None,
+             role=abstractfs.afsrole.DISCOVER):
         if plugin_name:
             plugin = self.findModule(plugin_name)
             if plugin:
                 return plugin.plugin_impl(plugin_config, role)
             else:
-                raise PluginNotExist("unable to find a plugin for %s" % plugin_name)
+                raise PluginNotExist(
+                    "unable to find a plugin for %s" %
+                    plugin_name)
         else:
             raise PluginLoaderError("a plugin name is not given")

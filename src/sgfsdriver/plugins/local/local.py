@@ -37,10 +37,12 @@ logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('syndicate_local_filesystem.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
+
 
 class InotifyEventHandler(pyinotify.ProcessEvent):
     def __init__(self, plugin):
@@ -74,6 +76,7 @@ class InotifyEventHandler(pyinotify.ProcessEvent):
         logger.info("Unhandled event to a file : %s" % event.pathname)
         logger.info("- %s" % event)
 
+
 class plugin_impl(abstractfs.afsbase):
     def __init__(self, config, role=abstractfs.afsrole.DISCOVER):
         logger.info("__init__")
@@ -89,7 +92,7 @@ class plugin_impl(abstractfs.afsbase):
         self.role = role
 
         # config can have unicode strings
-        work_root = work_root.encode('ascii','ignore')
+        work_root = work_root.encode('ascii', 'ignore')
         self.work_root = work_root.rstrip("/")
 
         if self.role == abstractfs.afsrole.DISCOVER:
@@ -115,7 +118,7 @@ class plugin_impl(abstractfs.afsbase):
     def on_update_detected(self, operation, path):
         logger.info("on_update_detected - %s, %s" % (operation, path))
 
-        ascii_path = path.encode('ascii','ignore')
+        ascii_path = path.encode('ascii', 'ignore')
         driver_path = self._make_driver_path(ascii_path)
 
         self.clear_cache(driver_path)
@@ -157,11 +160,15 @@ class plugin_impl(abstractfs.afsbase):
                 # start monitoring
                 self.notifier.start()
 
-                mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVE_SELF
-                self.watch_directory = self.watch_manager.add_watch(self.work_root,
-                                                                    mask,
-                                                                    rec=True,
-                                                                    auto_add=True)
+                mask = (pyinotify.IN_DELETE | pyinotify.IN_CREATE |
+                        pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB |
+                        pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO |
+                        pyinotify.IN_MOVE_SELF)
+                self.watch_directory = self.watch_manager.add_watch(
+                    self.work_root,
+                    mask,
+                    rec=True,
+                    auto_add=True)
             except:
                 self.close()
 
@@ -179,24 +186,25 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("stat - %s" % path)
 
         with self._get_lock():
-            ascii_path = path.encode('ascii','ignore')
+            ascii_path = path.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             driver_path = self._make_driver_path(ascii_path)
             # get stat
             sb = os.stat(localfs_path)
-            return abstractfs.afsstat(directory=stat.S_ISDIR(sb.st_mode),
-                                      path=driver_path,
-                                      name=os.path.basename(driver_path),
-                                      size=sb.st_size,
-                                      checksum=0,
-                                      create_time=sb.st_ctime,
-                                      modify_time=sb.st_mtime)
+            return abstractfs.afsstat(
+                directory=stat.S_ISDIR(sb.st_mode),
+                path=driver_path,
+                name=os.path.basename(driver_path),
+                size=sb.st_size,
+                checksum=0,
+                create_time=sb.st_ctime,
+                modify_time=sb.st_mtime)
 
     def exists(self, path):
         logger.info("exists - %s" % path)
 
         with self._get_lock():
-            ascii_path = path.encode('ascii','ignore')
+            ascii_path = path.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             exist = os.path.exists(localfs_path)
             return exist
@@ -205,7 +213,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("list_dir - %s" % dirpath)
 
         with self._get_lock():
-            ascii_path = dirpath.encode('ascii','ignore')
+            ascii_path = dirpath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             l = os.listdir(localfs_path)
             return l
@@ -214,7 +222,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("is_dir - %s" % dirpath)
 
         with self._get_lock():
-            ascii_path = dirpath.encode('ascii','ignore')
+            ascii_path = dirpath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             d = False
             if os.path.exists(localfs_path):
@@ -235,7 +243,7 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("read - %s, %d, %d" % (filepath, offset, size))
 
         with self._get_lock():
-            ascii_path = filepath.encode('ascii','ignore')
+            ascii_path = filepath.encode('ascii', 'ignore')
             localfs_path = self._make_localfs_path(ascii_path)
             with open(localfs_path, "r") as f:
                 f.seek(offset, 0)

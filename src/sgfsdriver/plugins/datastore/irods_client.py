@@ -34,25 +34,29 @@ logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('irods_client.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 
 METADATA_CACHE_SIZE = 1000
-METADATA_CACHE_TTL = 60 # 60 sec
+METADATA_CACHE_TTL = 60     # 60 sec
 
 """
 Interface class to iRODS
 """
+
+
 class irods_status(object):
-    def __init__(self, directory=False,
-                       path=None,
-                       name=None,
-                       size=0,
-                       checksum=0,
-                       create_time=0,
-                       modify_time=0):
+    def __init__(self,
+                 directory=False,
+                 path=None,
+                 name=None,
+                 size=0,
+                 checksum=0,
+                 create_time=0,
+                 modify_time=0):
         self.directory = directory
         self.path = path
         self.name = name
@@ -85,14 +89,17 @@ class irods_status(object):
         if self.directory:
             rep_d = "D"
 
-        return "<irods_status %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum)
+        return "<irods_status %s %s %d %s>" %
+        (rep_d, self.name, self.size, self.checksum)
+
 
 class irods_client(object):
-    def __init__(self, host=None,
-                       port=1247,
-                       user=None,
-                       password=None,
-                       zone=None):
+    def __init__(self,
+                 host=None,
+                 port=1247,
+                 user=None,
+                 password=None,
+                 zone=None):
         self.host = host
         self.port = port
         self.user = user
@@ -160,7 +167,8 @@ class irods_client(object):
                 # we only need to check the case if the path is a collection
                 # because if it is a file, it's parent dir must be accessible
                 # thus, _ensureDirEntryStatLoaded should succeed.
-                return irods_status.fromCollection(self.session.collections.get(path))
+                return irods_status.fromCollection(
+                    self.session.collections.get(path))
             except (CollectionDoesNotExist):
                 return None
 
@@ -212,20 +220,28 @@ class irods_client(object):
             self.meta_cache.clear()
 
     def read(self, path, offset, size):
-        logger.info("read : " + path + ", off(" + str(offset) + "), size(" + str(size) + ")")
+        logger.info(
+            "read : %s, off(%d), size(%d)" %
+            (path, offset, size))
         buf = None
         try:
-            logger.info("read: opening a file " + path)
+            logger.info("read: opening a file - %s" % path)
             obj = self.session.data_objects.get(path)
             with obj.open('r') as f:
                 if offset != 0:
-                    logger.info("read: seeking at " + str(offset))
+                    logger.info("read: seeking at %d" % offset)
                     new_offset = f.seek(offset)
                     if new_offset != offset:
-                        logger.error("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
-                        raise Exception("read: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+                        logger.error(
+                            "read: offset mismatch - requested(%d), "
+                            "but returned(%d)" %
+                            (offset, new_offset))
+                        raise Exception(
+                            "read: offset mismatch - requested(%d), "
+                            "but returned(%d)" %
+                            (offset, new_offset))
 
-                logger.info("read: reading size " + str(size))
+                logger.info("read: reading size - %d" % size)
                 buf = f.read(size)
                 logger.info("read: read done")
 
@@ -238,24 +254,32 @@ class irods_client(object):
         return buf
 
     def write(self, path, offset, buf):
-        logger.info("write : " + path + ", off(" + str(offset) + "), size(" + str(len(buf)) + ")")
+        logger.info(
+            "write : %s, off(%d), size(%d)" %
+            (path, offset, len(buf)))
         try:
             obj = None
             if self.exists(path):
-                logger.info("write: opening a file " + path)
+                logger.info("write: opening a file - %s" % path)
                 obj = self.session.data_objects.get(path)
             else:
-                logger.info("write: creating a file " + path)
+                logger.info("write: creating a file - %s" % path)
                 obj = self.session.data_objects.create(path)
             with obj.open('w') as f:
                 if offset != 0:
-                    logger.info("write: seeking at " + str(offset))
+                    logger.info("write: seeking at %d" % offset)
                     new_offset = f.seek(offset)
                     if new_offset != offset:
-                        logger.error("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
-                        raise Exception("write: offset mismatch - requested(" + str(offset) + "), but returned(" + new_offset + ")")
+                        logger.error(
+                            "write: offset mismatch - requested(%d), "
+                            "but returned(%d)" %
+                            (offset, new_offset))
+                        raise Exception(
+                            "write: offset mismatch - requested(%d), "
+                            "but returned(%d)" %
+                            (offset, new_offset))
 
-                logger.info("write: writing buffer " + str(len(buf)))
+                logger.info("write: writing buffer %d" % len(buf))
                 f.write(buf)
                 logger.info("write: writing done")
 
@@ -268,9 +292,9 @@ class irods_client(object):
         self.clear_stat_cache(path)
 
     def truncate(self, path, size):
-        logger.info("truncate : " + path)
+        logger.info("truncate : %s" % path)
         try:
-            logger.info("truncate: truncating a file " + path)
+            logger.info("truncate: truncating a file - %s" % path)
             self.session.data_objects.truncate(path, size)
             logger.info("truncate: truncating done")
 
@@ -283,9 +307,9 @@ class irods_client(object):
         self.clear_stat_cache(path)
 
     def unlink(self, path):
-        logger.info("unlink : " + path)
+        logger.info("unlink : %s" % path)
         try:
-            logger.info("unlink: deleting a file " + path)
+            logger.info("unlink: deleting a file - %s" % path)
             self.session.data_objects.unlink(path)
             logger.info("unlink: deleting done")
 
@@ -298,9 +322,9 @@ class irods_client(object):
         self.clear_stat_cache(path)
 
     def rename(self, path1, path2):
-        logger.info("rename : " + path1 + " -> " + path2)
+        logger.info("rename : %s -> %s" % (path1, path2))
         try:
-            logger.info("rename: renaming a file " + path1 + " to " + path2)
+            logger.info("rename: renaming a file - %s to %s" % (path1, path2))
             self.session.data_objects.move(path1, path2)
             logger.info("rename: renaming done")
 
@@ -314,9 +338,11 @@ class irods_client(object):
         self.clear_stat_cache(path2)
 
     def set_xattr(self, path, key, value):
-        logger.info("set_xattr : " + key + " - " + value)
+        logger.info("set_xattr : %s - %s" % (key, value))
         try:
-            logger.info("set_xattr: set extended attribute to a file " + path + " " + key + "=" + value)
+            logger.info(
+                "set_xattr: set extended attribute to a file %s %s=%s" %
+                (path, key, value))
             self.session.metadata.set(DataObject, path, iRODSMeta(key, value))
             logger.info("set_xattr: done")
 
@@ -329,7 +355,9 @@ class irods_client(object):
         logger.info("get_xattr : " + key)
         value = None
         try:
-            logger.info("get_xattr: get extended attribute from a file " + path + " " + key)
+            logger.info(
+                "get_xattr: get extended attribute from a file - %s %s" %
+                (path, key))
             attrs = self.session.metadata.get(DataObject, path)
             for attr in attrs:
                 if key == attr.name:
@@ -345,10 +373,12 @@ class irods_client(object):
         return value
 
     def list_xattr(self, path):
-        logger.info("list_xattr : " + key)
+        logger.info("list_xattr : %s" % key)
         keys = []
         try:
-            logger.info("list_xattr: get extended attributes from a file " + path)
+            logger.info(
+                "list_xattr: get extended attributes from a file - %s" %
+                path)
             attrs = self.session.metadata.get(DataObject, path)
             for attr in attrs:
                 keys.append(attr.name)

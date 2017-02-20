@@ -25,14 +25,16 @@ from datetime import datetime
 """
 Abstraction of filesystem insterface
 """
+
+
 class afsstat(object):
     def __init__(self, directory=False,
-                       path=None,
-                       name=None,
-                       size=0,
-                       checksum=0,
-                       create_time=0,
-                       modify_time=0):
+                 path=None,
+                 name=None,
+                 size=0,
+                 checksum=0,
+                 create_time=0,
+                 modify_time=0):
         self.directory = directory
         self.path = path
         self.name = name
@@ -56,7 +58,8 @@ class afsstat(object):
         if self.directory:
             rep_d = "D"
 
-        return "<afsstat %s %s %d %s>" % (rep_d, self.name, self.size, self.checksum)
+        return "<afsstat %s %s %d %s>" %
+        (rep_d, self.name, self.size, self.checksum)
 
     def toJson(self):
         return json.dumps(self.__dict__)
@@ -117,7 +120,8 @@ class afsbase(object):
     def exists(self, path):
         pass
 
-    # list directory entries (files and sub-directories) and return names of found items
+    # list directory entries (files and sub-directories)
+    # and return names of found items
     @abstractmethod
     def list_dir(self, dirpath):
         pass
@@ -132,7 +136,8 @@ class afsbase(object):
     def make_dirs(self, dirpath):
         pass
 
-    # read bytes at given offset in given size from given path and return byte[]
+    # read bytes at given offset in given size from given path
+    # and return byte[]
     @abstractmethod
     def read(self, filepath, offset, size):
         pass
