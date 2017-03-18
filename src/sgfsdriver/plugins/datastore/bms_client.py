@@ -95,8 +95,8 @@ class bms_registration_result(object):
         return False
 
     def __repr__(self):
-        return "<bms_registration_result %s %d %d>" %
-        (self.client, self.lease_start, self.lease_expire)
+        return "<bms_registration_result %s %d %d>" % \
+            (self.client, self.lease_start, self.lease_expire)
 
 
 class bms_message_acceptor(object):
@@ -110,8 +110,8 @@ class bms_message_acceptor(object):
         return self.__dict__
 
     def __repr__(self):
-        return "<bms_message_acceptor %s %s>" %
-        (self.acceptor, self.pattern)
+        return "<bms_message_acceptor %s %s>" % \
+            (self.acceptor, self.pattern)
 
 
 class bms_client(object):

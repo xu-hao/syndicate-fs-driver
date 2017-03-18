@@ -117,8 +117,8 @@ class block_meta(object):
         self.block_size = block_size
 
     def toString(self):
-        return "%d|%d|%d" %
-        (self.block_refer_log, self.block_version, self.block_size)
+        return "%d|%d|%d" % \
+            (self.block_refer_log, self.block_version, self.block_size)
 
     @classmethod
     def fromString(cls, s):
@@ -129,8 +129,8 @@ class block_meta(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<block_meta %d %d %d>" %
-        (self.block_refer_log, self.block_version, self.block_size)
+        return "<block_meta %d %d %d>" % \
+            (self.block_refer_log, self.block_version, self.block_size)
 
 
 class file_meta(object):
