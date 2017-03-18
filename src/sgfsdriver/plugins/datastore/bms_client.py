@@ -61,8 +61,8 @@ class bms_registration_result_client(object):
             dictionary['application_name'])
 
     def __repr__(self):
-        return "<bms_registration_result_client %s %s>" %
-        (self.user_id, self.application_name)
+        return "<bms_registration_result_client %s %s>" % \
+            (self.user_id, self.application_name)
 
 
 class bms_registration_result(object):

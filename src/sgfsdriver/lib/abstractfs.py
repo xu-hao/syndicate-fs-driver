@@ -58,8 +58,8 @@ class afsstat(object):
         if self.directory:
             rep_d = "D"
 
-        return "<afsstat %s %s %d %s>" %
-        (rep_d, self.name, self.size, self.checksum)
+        return "<afsstat %s %s %d %s>" % \
+            (rep_d, self.name, self.size, self.checksum)
 
     def toJson(self):
         return json.dumps(self.__dict__)

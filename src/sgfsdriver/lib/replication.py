@@ -57,8 +57,8 @@ class undo_log_block(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log_block %d %d %d>" %
-        (self.block_id, self.block_version, self.block_size)
+        return "<undo_log_block %d %d %d>" % \
+            (self.block_id, self.block_version, self.block_size)
 
 
 class undo_log(object):

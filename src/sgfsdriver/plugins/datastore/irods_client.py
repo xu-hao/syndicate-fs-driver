@@ -89,8 +89,8 @@ class irods_status(object):
         if self.directory:
             rep_d = "D"
 
-        return "<irods_status %s %s %d %s>" %
-        (rep_d, self.name, self.size, self.checksum)
+        return "<irods_status %s %s %d %s>" % \
+            (rep_d, self.name, self.size, self.checksum)
 
 
 class irods_client(object):

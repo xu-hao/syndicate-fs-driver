@@ -103,8 +103,8 @@ class dbmanager(object):
         entries = []
         query_string = "SELECT * FROM tbl_dataset \
                         WHERE path=? ORDER BY filename"
-        for row_path, row_filename, row_status, row_registered_time
-        in db_cursor.execute(query_string, (path,)):
+        records = db_cursor.execute(query_string, (path,))
+        for row_path, row_filename, row_status, row_registered_time in records:
             entry = {"path": row_path,
                      "filename": row_filename,
                      "status": abstractfs.afsstat.fromJson(row_status),
