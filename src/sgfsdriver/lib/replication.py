@@ -106,8 +106,8 @@ class undo_log(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self):
-        return "<undo_log %s %s %s>" %
-        (self.data_path, self.log_path, self.log)
+        return "<undo_log %s %s %s>" % \
+            (self.data_path, self.log_path, self.log)
 
 
 class block_meta(object):

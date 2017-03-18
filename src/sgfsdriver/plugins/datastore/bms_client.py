@@ -89,9 +89,8 @@ class bms_registration_result(object):
     def isRegistrationJson(cls, json_string):
         if json_string and len(json_string) > 0:
             msg = json.loads(json_string)
-            if ('client' in msg) and
-            ('lease_start' in msg) and
-            ('lease_expire' in msg):
+            if (('client' in msg) and ('lease_start' in msg) and
+                    ('lease_expire' in msg)):
                 return True
         return False
 
