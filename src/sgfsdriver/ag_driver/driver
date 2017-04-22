@@ -189,14 +189,15 @@ def _resync(path):
                 # entry is a filename
                 entry_path = last_dir.rstrip("/") + "/" + entry
                 st = fs.stat(entry_path)
-                e = abstractfs.afsevent(entry_path, st)
+                if st:
+                    e = abstractfs.afsevent(entry_path, st)
 
-                if st.directory:
-                    if sync_fully:
-                        # do sync recursively
-                        stack.append(entry_path)
+                    if st.directory:
+                        if sync_fully:
+                            # do sync recursively
+                            stack.append(entry_path)
 
-                datasets_update_cb([], [e], [])
+                    datasets_update_cb([], [e], [])
 
 
 def driver_init(driver_config, driver_secrets):
@@ -322,24 +323,25 @@ def refresh(request, driver_config, driver_secrets):
         # update
         gateway.log_debug("Still present: '%s'" % file_path)
         stat = fs.stat(file_path)
-        if not stat.directory:
-            # file
-            cmd = gateway.make_metadata_command(
-                "put", "file", 0755,
-                stat.size, file_path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_REFRESH_FILE_TTL)
-            gateway.log_debug("Queuing a command %s" % cmd['path'])
-            command_queue.put((cmd, sem))
-        else:
-            # directory
-            cmd = gateway.make_metadata_command(
-                "put", "directory", 0755,
-                None, file_path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL)
-            gateway.log_debug("Queuing a command %s" % cmd['path'])
-            command_queue.put((cmd, sem))
+        if stat:
+            if not stat.directory:
+                # file
+                cmd = gateway.make_metadata_command(
+                    "put", "file", 0755,
+                    stat.size, file_path,
+                    read_ttl=DEFAULT_READ_TTL,
+                    write_ttl=DEFAULT_REFRESH_FILE_TTL)
+                gateway.log_debug("Queuing a command %s" % cmd['path'])
+                command_queue.put((cmd, sem))
+            else:
+                # directory
+                cmd = gateway.make_metadata_command(
+                    "put", "directory", 0755,
+                    None, file_path,
+                    read_ttl=DEFAULT_READ_TTL,
+                    write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL)
+                gateway.log_debug("Queuing a command %s" % cmd['path'])
+                command_queue.put((cmd, sem))
 
     # need to block until the queued command is processed
     gateway.log_debug("Waiting for a new command to be processed")
