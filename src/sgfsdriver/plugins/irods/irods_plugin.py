@@ -134,11 +134,12 @@ class plugin_impl(abstractfs.afsbase):
         elif operation in ["create", "modify"]:
             if self.notification_cb:
                 st = self.stat(driver_path)
-                entry = abstractfs.afsevent(driver_path, st)
-                if operation == "create":
-                    self.notification_cb([], [entry], [])
-                elif operation == "modify":
-                    self.notification_cb([entry], [], [])
+                if st:
+                    entry = abstractfs.afsevent(driver_path, st)
+                    if operation == "create":
+                        self.notification_cb([], [entry], [])
+                    elif operation == "modify":
+                        self.notification_cb([entry], [], [])
 
     def _make_irods_path(self, path):
         if path.startswith(self.work_root):
@@ -179,13 +180,16 @@ class plugin_impl(abstractfs.afsbase):
             driver_path = self._make_driver_path(ascii_path)
             # get stat
             sb = self.irods.stat(irods_path)
-            return abstractfs.afsstat(directory=sb.directory,
-                                      path=driver_path,
-                                      name=os.path.basename(driver_path),
-                                      size=sb.size,
-                                      checksum=sb.checksum,
-                                      create_time=sb.create_time,
-                                      modify_time=sb.modify_time)
+            if sb:
+                return abstractfs.afsstat(directory=sb.directory,
+                                          path=driver_path,
+                                          name=os.path.basename(driver_path),
+                                          size=sb.size,
+                                          checksum=sb.checksum,
+                                          create_time=sb.create_time,
+                                          modify_time=sb.modify_time)
+            else:
+                return None
 
     @reconnectAtIRODSFail
     def exists(self, path):
