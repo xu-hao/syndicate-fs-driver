@@ -23,9 +23,7 @@ Serves files on a remote system through generic fs plugin.
 
 import traceback
 import sys
-import os
 import errno
-import time
 import threading
 import Queue
 import json
@@ -124,8 +122,6 @@ def _shutdownFS():
 
 
 def datasets_update_cb(updated_entries, added_entries, removed_entries):
-    global command_queue
-
     gateway.log_debug("datasets_update_cb")
 
     for u in updated_entries:
@@ -174,9 +170,6 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
 
 
 def _resync(path):
-    global fs
-    global sync_fully
-
     gateway.log_debug("_resync")
 
     stack = [path]
@@ -204,10 +197,6 @@ def driver_init(driver_config, driver_secrets):
     """
     Do the one-time driver setup.
     """
-
-    global fs
-    global storage_dir
-
     gateway.log_debug("driver_init")
 
     # detect a role
@@ -259,9 +248,6 @@ def next_dataset(driver_config, driver_secrets):
     Return True if there are more datasets to process.
     Return False if not.
     """
-
-    global command_queue
-
     gateway.log_debug("next_dataset")
 
     # find the next command
@@ -299,10 +285,6 @@ def refresh(request, driver_config, driver_secrets):
     Verify that it still exists, and if so,
     queue it for republishing.
     """
-
-    global fs
-    global command_queue
-
     gateway.log_debug("refresh")
 
     path = gateway.request_path(request)
@@ -362,9 +344,6 @@ def read(request, chunk_fd, driver_config, driver_secrets):
     @driver_config is a dict containing the driver's config
     @driver_secrets is a dict containing the driver's unencrypted secrets
     """
-
-    global fs
-
     gateway.log_debug("read")
 
     path = gateway.request_path(request)

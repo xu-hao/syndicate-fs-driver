@@ -22,7 +22,6 @@ Serves files on a remote system through generic fs plugin.
 """
 
 import traceback
-import sys
 import os
 import errno
 import threading
@@ -116,11 +115,8 @@ def driver_init(driver_config, driver_secrets):
     """
     Do the one-time driver setup.
     """
-
     gateway.log_debug("driver_init")
 
-    global fs
-    global storage_dir
     global lock
 
     # create a re-entrant lock (not a read lock)
@@ -149,7 +145,6 @@ def driver_shutdown():
     """
     Do the one-time driver shutdown
     """
-
     gateway.log_debug("driver_shutdown")
 
     _shutdownFS()
@@ -163,10 +158,6 @@ def read_chunk(chunk_request, outfile, driver_config, driver_secrets):
         @driver_config is a dict containing the driver's config
         @driver_secrets is a dict containing the driver's unencrypted secrets
     """
-
-    global fs
-    global block_replication
-
     gateway.log_debug("read_chunk - %d" % chunk_request.request_type)
 
     try:
@@ -227,9 +218,6 @@ def read_chunk(chunk_request, outfile, driver_config, driver_secrets):
 
 
 def write_chunk(chunk_request, chunk_buf, driver_config, driver_secrets):
-    global fs
-    global block_replication
-
     gateway.log_debug("write_chunk - %d" % chunk_request.request_type)
 
     byte_offset = gateway.request_byte_offset(chunk_request)
@@ -305,9 +293,6 @@ def write_chunk(chunk_request, chunk_buf, driver_config, driver_secrets):
 
 
 def delete_chunk(chunk_request, driver_config, driver_secrets):
-    global fs
-    global block_replication
-
     gateway.log_debug("delete_chunk - %d" % chunk_request.request_type)
 
     try:
@@ -345,9 +330,6 @@ def delete_chunk(chunk_request, driver_config, driver_secrets):
 
 def rename_file(chunk_request, old_path, new_path,
                 driver_config, driver_secrets):
-    global fs
-    global block_replication
-
     gateway.log_debug("rename_file - %d" % chunk_request.request_type)
 
     from_path = gateway.request_path(chunk_request)
