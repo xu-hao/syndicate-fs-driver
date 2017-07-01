@@ -3,13 +3,13 @@
    "EXEC_FMT":          "/usr/bin/env python -m syndicate.ag.gateway",
    "DRIVER":            "syndicate.ag.drivers.fs",
    "DRIVER_FS_PLUGIN":  "irods",
-   "DRIVER_FS_PLUGIN_CONFIG": 
+   "DRIVER_FS_PLUGIN_CONFIG":
       {
          "irods":
             {
-               "host":  "irods-2.cyverse.org",
+               "host":  "data.cyverse.org",
                "port":  1247,
                "zone":  "iplant"
             }
-      }                     
+      }
 }
