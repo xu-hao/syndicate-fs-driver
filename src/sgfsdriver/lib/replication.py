@@ -18,11 +18,8 @@
 
 import os
 import sys
-import time
 import threading
 import struct
-
-import sgfsdriver.lib.abstractfs as abstractfs
 
 """
 undo-log class
