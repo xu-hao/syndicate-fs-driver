@@ -20,7 +20,6 @@
 General iRODS Plugin
 """
 import os
-import time
 import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
@@ -84,7 +83,7 @@ class plugin_impl(abstractfs.afsbase):
             raise ValueError("irods configuration is not given correctly")
 
         # set role
-        self.role = role
+        self._role = role
 
         # config can have unicode strings
         work_root = work_root.encode('ascii', 'ignore')
@@ -160,7 +159,7 @@ class plugin_impl(abstractfs.afsbase):
 
         self.irods.connect()
 
-        if self.role == abstractfs.afsrole.DISCOVER:
+        if self._role == abstractfs.afsrole.DISCOVER:
             if not self.irods.exists(self.work_root):
                 raise IOError("work_root does not exist")
 
@@ -322,7 +321,7 @@ class plugin_impl(abstractfs.afsbase):
         return self.__class__
 
     def role(self):
-        return self.role
+        return self._role
 
     def set_notification_cb(self, notification_cb):
         logger.info("set_notification_cb")

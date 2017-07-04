@@ -18,11 +18,9 @@
 
 import traceback
 import os
-import irods
 import logging
 
 from irods.session import iRODSSession
-from irods.data_object import iRODSDataObject, iRODSDataObjectFileRaw
 from irods.models import DataObject
 from irods.meta import iRODSMeta
 from irods.exception import CollectionDoesNotExist, DataObjectDoesNotExist

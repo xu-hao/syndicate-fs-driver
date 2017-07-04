@@ -16,7 +16,6 @@
    limitations under the License.
 """
 
-import os
 import pika
 import json
 import string

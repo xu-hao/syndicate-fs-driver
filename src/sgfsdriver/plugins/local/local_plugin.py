@@ -20,9 +20,7 @@
 Local-filesystem Plugin
 """
 import os
-import sys
 import xattr
-import time
 import stat
 import logging
 import threading
@@ -89,13 +87,13 @@ class plugin_impl(abstractfs.afsbase):
             raise ValueError("work_root configuration is not given correctly")
 
         # set role
-        self.role = role
+        self._role = role
 
         # config can have unicode strings
         work_root = work_root.encode('ascii', 'ignore')
         self.work_root = work_root.rstrip("/")
 
-        if self.role == abstractfs.afsrole.DISCOVER:
+        if self._role == abstractfs.afsrole.DISCOVER:
             # set inotify
             self.watch_manager = pyinotify.WatchManager()
             self.notify_handler = InotifyEventHandler(self)
@@ -152,7 +150,7 @@ class plugin_impl(abstractfs.afsbase):
     def connect(self):
         logger.info("connect")
 
-        if self.role == abstractfs.afsrole.DISCOVER:
+        if self._role == abstractfs.afsrole.DISCOVER:
             if not os.path.exists(self.work_root):
                 raise IOError("work_root does not exist")
 
@@ -175,7 +173,7 @@ class plugin_impl(abstractfs.afsbase):
     def close(self):
         logger.info("close")
 
-        if self.role == abstractfs.afsrole.DISCOVER:
+        if self._role == abstractfs.afsrole.DISCOVER:
             if self.watch_manager and self.watch_directory:
                 self.watch_manager.rm_watch(self.watch_directory.values())
 
@@ -320,7 +318,7 @@ class plugin_impl(abstractfs.afsbase):
         return self.__class__
 
     def role(self):
-        return self.role
+        return self._role
 
     def set_notification_cb(self, notification_cb):
         logger.info("set_notification_cb")
