@@ -146,7 +146,7 @@ class undo_log(object):
 
     @classmethod
     def make_log_path(self, path):
-        return ".%s.%s" % (path, undo_log.UNDO_LOG_SUFFIX)
+        return "%s.%s" % (path, undo_log.UNDO_LOG_SUFFIX)
 
     @classmethod
     def is_log_path(cls, path):
@@ -295,7 +295,7 @@ class meta_file(object):
 
     @classmethod
     def make_meta_path(self, path):
-        return ".%s.%s" % (path, meta_file.META_FILE_SUFFIX)
+        return "%s.%s" % (path, meta_file.META_FILE_SUFFIX)
 
     @classmethod
     def is_meta_path(cls, path):
