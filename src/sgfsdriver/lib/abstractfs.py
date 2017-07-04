@@ -28,6 +28,9 @@ Abstraction of filesystem insterface
 
 
 class afsstat(object):
+    """
+    Abstract File Status
+    """
     def __init__(self, directory=False,
                  path=None,
                  name=None,
@@ -84,7 +87,7 @@ class afsevent(object):
         return "<afsevent %s %s>" % (self.path, self.stat)
 
 
-class afsrole:
+class afsrole(object):
     DISCOVER = 1
     READ = 2
     WRITE = 3
@@ -160,21 +163,6 @@ class afsbase(object):
     # rename given file
     @abstractmethod
     def rename(self, filepath1, filepath2):
-        pass
-
-    # set xattr
-    @abstractmethod
-    def set_xattr(self, filepath, key, value):
-        pass
-
-    # get xattr
-    @abstractmethod
-    def get_xattr(self, filepath, key):
-        pass
-
-    # list xattr
-    @abstractmethod
-    def list_xattr(self, filepath):
         pass
 
     # clear cache if exists

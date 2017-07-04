@@ -128,18 +128,27 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
         if u.stat and not u.stat.directory:
             # file
             cmd = gateway.make_metadata_command(
-                "put", "file", 0755,
-                u.stat.size, u.path,
-                read_ttl=DEFAULT_READ_TTL, write_ttl=DEFAULT_SCAN_FILE_TTL)
+                "put",
+                "file",
+                0755,
+                u.stat.size,
+                u.path,
+                read_ttl=DEFAULT_READ_TTL,
+                write_ttl=DEFAULT_SCAN_FILE_TTL
+            )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
         else:
             # directory
             cmd = gateway.make_metadata_command(
-                "put", "directory", 0755,
-                None, u.path,
+                "put",
+                "directory",
+                0755,
+                None,
+                u.path,
                 read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL)
+                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL
+            )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
 
@@ -147,19 +156,27 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
         if a.stat and not a.stat.directory:
             # file
             cmd = gateway.make_metadata_command(
-                "put", "file", 0755,
-                a.stat.size, a.path,
+                "put",
+                "file",
+                0755,
+                a.stat.size,
+                a.path,
                 read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_FILE_TTL)
+                write_ttl=DEFAULT_SCAN_FILE_TTL
+            )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
         else:
             # directory
             cmd = gateway.make_metadata_command(
-                "put", "directory", 0755,
-                None, a.path,
+                "put",
+                "directory",
+                0755,
+                None,
+                a.path,
                 read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL)
+                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL
+            )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
 
@@ -233,7 +250,6 @@ def driver_shutdown():
     """
     Do the one-time driver shutdown
     """
-
     gateway.log_debug("driver_shutdown")
 
     _shutdownFS()
@@ -309,19 +325,27 @@ def refresh(request, driver_config, driver_secrets):
             if not stat.directory:
                 # file
                 cmd = gateway.make_metadata_command(
-                    "put", "file", 0755,
-                    stat.size, file_path,
+                    "put",
+                    "file",
+                    0755,
+                    stat.size,
+                    file_path,
                     read_ttl=DEFAULT_READ_TTL,
-                    write_ttl=DEFAULT_REFRESH_FILE_TTL)
+                    write_ttl=DEFAULT_REFRESH_FILE_TTL
+                )
                 gateway.log_debug("Queuing a command %s" % cmd['path'])
                 command_queue.put((cmd, sem))
             else:
                 # directory
                 cmd = gateway.make_metadata_command(
-                    "put", "directory", 0755,
-                    None, file_path,
+                    "put",
+                    "directory",
+                    0755,
+                    None,
+                    file_path,
                     read_ttl=DEFAULT_READ_TTL,
-                    write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL)
+                    write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL
+                )
                 gateway.log_debug("Queuing a command %s" % cmd['path'])
                 command_queue.put((cmd, sem))
 
@@ -354,15 +378,15 @@ def read(request, chunk_fd, driver_config, driver_secrets):
     if byte_offset is None:
         # this is a bug
         gateway.log_error(
-            "BUG: byte offset of request on %s is not defined" %
-            file_path)
+            "BUG: byte offset of request on %s is not defined" % file_path
+        )
         sys.exit(1)
 
     if byte_len is None:
         # this is a bug
         gateway.log_error(
-            "BUG: byte len of request on %s is not defined" %
-            file_path)
+            "BUG: byte len of request on %s is not defined" % file_path
+        )
         sys.exit(1)
 
     if not fs.exists(file_path):

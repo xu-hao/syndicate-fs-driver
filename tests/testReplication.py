@@ -20,10 +20,7 @@
 Replication module test
 """
 
-import time
 import traceback
-import threading
-import errno
 import os
 import imp
 import sys
@@ -57,14 +54,15 @@ class ReplicationDriver():
         role = abstractfs.afsrole.WRITE
 
         # continue only when fs is not initialized
-        if not driver_config.has_key('DRIVER_FS_PLUGIN'):
+        if not 'DRIVER_FS_PLUGIN' in driver_config:
             raise ReplicationDriverException("No DRIVER_FS_PLUGIN defined")
 
-        if not driver_config.has_key('DRIVER_FS_PLUGIN_CONFIG'):
+        if not 'DRIVER_FS_PLUGIN_CONFIG' in driver_config:
             raise ReplicationDriverException(
-                    "No DRIVER_FS_PLUGIN_CONFIG defined")
+                "No DRIVER_FS_PLUGIN_CONFIG defined"
+            )
 
-        if not driver_config.has_key('STORAGE_DIR'):
+        if not 'STORAGE_DIR' in driver_config:
             raise ReplicationDriverException("No STORAGE_DIR defined")
 
         self.storage_dir = driver_config['STORAGE_DIR']
@@ -75,6 +73,7 @@ class ReplicationDriver():
         if isinstance(driver_config['DRIVER_FS_PLUGIN_CONFIG'], dict):
             plugin_config = driver_config['DRIVER_FS_PLUGIN_CONFIG']
         elif isinstance(driver_config['DRIVER_FS_PLUGIN_CONFIG'], basestring):
+            # JSONFY
             json_plugin_config = driver_config['DRIVER_FS_PLUGIN_CONFIG']
             plugin_config = json.loads(json_plugin_config)
 
@@ -87,22 +86,24 @@ class ReplicationDriver():
 
             if not self.fs:
                 raise ReplicationDriverException(
-                        "No such driver plugin found: %s" % plugin)
+                    "No such driver plugin found: %s" % plugin
+                )
 
             self.fs.connect()
 
             if not self.fs.exists("/"):
                 raise ReplicationDriverException(
-                        "No such file or directory: %s" % self.storage_dir)
+                    "No such file or directory: %s" % self.storage_dir
+                )
 
             if not self.fs.is_dir("/"):
                 raise ReplicationDriverException(
-                        "Not a directory: %s" % self.storage_dir)
+                    "Not a directory: %s" % self.storage_dir
+                )
 
         except Exception as e:
             traceback.print_exc()
             raise ReplicationDriverException(e)
-
 
     def shutdown(self):
         """
@@ -115,67 +116,98 @@ class ReplicationDriver():
                 pass
         self.fs = None
 
+    def get_chunk_len(self, path):
+        # use replication module to access a file containing the block
+        repl = replication.replica(self.fs, path, self.block_size)
+        repl.fix_consistency()
+
+        return repl.get_data_block_len()
 
     def read_chunk(self, path, block_id, block_version, outfile):
-        try:
-            # use replication module to access a file containing the block
-            replica = replication.replica(self.fs, path, self.block_size)
-            replica.makeConsistent()
-            buf = replica.readBlock(block_id, block_version)
-            if not buf:
-                raise ReplicationDriverException(
-                    "WARN: block %d of '%s' does not exist" % (block_id, path))
+        # use replication module to access a file containing the block
+        repl = replication.replica(self.fs, path, self.block_size)
+        repl.fix_consistency()
 
-            outfile.write(buf)
-        except Exception:
-            return -errno.EIO
+        requests = []
+        dblock = replication.data_block(block_id, block_version, None)
+        requests.append(dblock)
+        responses = repl.read_data_blocks(requests)
+        if not responses or not responses[0] or not responses[0].data:
+            raise ReplicationDriverException(
+                "WARN: block %d of '%s' does not exist" % (block_id, path)
+            )
+
+        outfile.write(responses[0].data)
         return 0
-
 
     def write_chunk(self, path, block_id, block_version, chunk_buf):
-        try:
-            # use replication module to access a file containing the block
-            replica = replication.replica(self.fs, path, self.block_size)
-            replica.makeConsistent()
-            replica.replicateBlock(block_id, chunk_buf, block_version)
-        except Exception:
-            return -errno.EIO
-        return 0
+        # use replication module to access a file containing the block
+        repl = replication.replica(self.fs, path, self.block_size)
+        repl.fix_consistency()
 
+        repl.begin_transaction()
+        requests = []
+        dblock = replication.data_block(block_id, block_version, chunk_buf)
+        requests.append(dblock)
+        repl.write_data_blocks(requests)
+
+        repl.commit()
+        return 0
 
     def delete_chunk(self, path, block_id, block_version):
-        try:
-            # use replication module to access a file containing the block
-            replica = replication.replica(self.fs, path, self.block_size)
-            replica.makeConsistent()
-            replica.deleteBlock(block_id, block_version)
-        except Exception:
-            return -errno.EIO
+        # use replication module to access a file containing the block
+        repl = replication.replica(self.fs, path, self.block_size)
+        repl.fix_consistency()
+
+        repl.begin_transaction()
+
+        requests = []
+        dblock = replication.data_block(block_id, block_version, None)
+        requests.append(dblock)
+        repl.delete_data_blocks(requests)
+
+        repl.commit()
         return 0
 
-
     def replicate_all(self, in_path, out_path, block_version=1):
+        # use replication module to access a file containing the block
+        repl = replication.replica(self.fs, out_path, self.block_size)
+        repl.fix_consistency()
+        repl.begin_transaction()
+
+        requests = []
         block_id = 0
         with open(in_path, "r") as f:
             while True:
                 buf = f.read(self.block_size)
                 if buf:
-                    self.write_chunk(out_path, block_id, block_version, buf)
+                    dblock = replication.data_block(
+                        block_id,
+                        block_version,
+                        buf
+                    )
+                    requests.append(dblock)
                     block_id += 1
                 else:
                     break
-        return block_id
 
+        repl.write_data_blocks(requests)
+
+        repl.commit()
+        return 0
 
     def read_and_check(self, in_path, comp_path, block_version=1):
         block_id = 0
         file_size = 0
         size_read = 0
+        chunk_len = self.get_chunk_len(in_path)
+
         with open(comp_path, "r") as f:
             f.seek(0, os.SEEK_END)
             file_size = f.tell()
             f.seek(0, os.SEEK_SET)
-            while True:
+
+            while block_id < chunk_len:
                 comp_buf = io.BytesIO()
                 self.read_chunk(in_path, block_id, block_version, comp_buf)
                 read_buf = f.read(self.block_size)
@@ -185,7 +217,7 @@ class ReplicationDriver():
 
                 if len(comp_buf_arr) == 0:
                     assert file_size == size_read
-                    break;
+                    break
 
                 offset = 0
                 for o in comp_buf_arr:
@@ -194,6 +226,19 @@ class ReplicationDriver():
 
                 block_id += 1
                 size_read += len(comp_buf_arr)
+
+    def delete_all(self, path, block_version=1):
+        chunk_len = self.get_chunk_len(path)
+        block_id = 0
+        while True:
+            result = self.delete_chunk(path, block_id, block_version)
+            block_id += 1
+
+            if result != 0:
+                break
+
+            if block_id >= chunk_len:
+                break
 
 
 def load_config_secrets(cs_dir):
@@ -222,9 +267,6 @@ class TestcaseNotExist(Exception):
         return repr(self.value)
 
 
-"""
-Find a testcase and create an instance
-"""
 def load_testcase(testcase_path):
     if os.path.exists(testcase_path):
         filename = os.path.basename(testcase_path)
@@ -234,10 +276,13 @@ def load_testcase(testcase_path):
             return testcase
         else:
             raise TestcaseNotExist(
-                "unable to find a testcase for %s" % testcase_path)
+                "unable to find a testcase for %s" % testcase_path
+            )
     else:
         raise TestcaseNotExist(
-            "unable to find a testcase for %s" % testcase_path)
+            "unable to find a testcase for %s" % testcase_path
+        )
+
 
 def main():
     if len(sys.argv) != 3:
@@ -266,7 +311,9 @@ def main():
         # start test
         testcase = load_testcase(testcase_path)
         test = testcase.replication_test_impl(driver)
+        print "start test (%s)!" % os.path.basename(testcase_path)
         test.start()
+        print "finish test (%s)!" % os.path.basename(testcase_path)
 
         driver.shutdown()
     except Exception:
