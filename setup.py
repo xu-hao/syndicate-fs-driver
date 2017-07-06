@@ -19,12 +19,12 @@
 from setuptools import setup
 
 import os
-import sys
-import shutil
 
-packages = ['sgfsdriver',
-            'sgfsdriver.lib',
-            'sgfsdriver.plugins']
+packages = [
+    'sgfsdriver',
+    'sgfsdriver.lib',
+    'sgfsdriver.plugins'
+]
 
 # detect plugins
 plugins = os.listdir('src/sgfsdriver/plugins')
@@ -33,21 +33,26 @@ for plugin in plugins:
         packages.append('sgfsdriver.plugins.' + plugin)
 
 # dependencies
-dependencies = ['pika',
-                'python-irodsclient',
-                'pyinotify',
-                'expiringdict']
+dependencies = [
+    'pika',
+    'python-irodsclient',
+    'pyinotify',
+    'expiringdict',
+    'ftputil'
+]
 
-setup(name='sgfsdriver',
-      version='0.1',
-      description='Syndicate Gateway Filesystem Driver',
-      url='https://github.com/syndicate-storage/syndicate-fs-driver',
-      author='Illyoung Choi',
-      author_email='syndicate@lists.cs.princeton.edu',
-      license='Apache 2.0',
-      packages=packages,
-      package_dir={
-                  'sgfsdriver': 'src/sgfsdriver'
-      },
-      install_requires=dependencies,
-      zip_safe=False)
+setup(
+    name='sgfsdriver',
+    version='0.1',
+    description='Syndicate Gateway Filesystem Driver',
+    url='https://github.com/syndicate-storage/syndicate-fs-driver',
+    author='Illyoung Choi',
+    author_email='syndicate@lists.cs.princeton.edu',
+    license='Apache 2.0',
+    packages=packages,
+    package_dir={
+        'sgfsdriver': 'src/sgfsdriver'
+    },
+    install_requires=dependencies,
+    zip_safe=False
+)

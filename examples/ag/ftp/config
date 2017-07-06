@@ -1,0 +1,14 @@
+{
+   "DATASET_DIR":       "/genbank",
+   "EXEC_FMT":          "/usr/bin/env python -m syndicate.ag.gateway",
+   "DRIVER":            "syndicate.ag.drivers.fs",
+   "DRIVER_FS_PLUGIN":  "ftp",
+   "DRIVER_FS_PLUGIN_CONFIG":
+      {
+         "ftp":
+            {
+               "host":  "ftp.ncbi.nlm.nih.gov",
+               "port":  23
+            }
+      }
+}

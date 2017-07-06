@@ -38,7 +38,7 @@ fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 
-METADATA_CACHE_SIZE = 1000
+METADATA_CACHE_SIZE = 10000
 METADATA_CACHE_TTL = 60     # 60 sec
 
 """
@@ -155,9 +155,9 @@ class irods_client(object):
             parent = os.path.dirname(path)
             stats = self._ensureDirEntryStatLoaded(parent)
             if stats:
-                for stat in stats:
-                    if stat.path == path:
-                        return stat
+                for sb in stats:
+                    if sb.path == path:
+                        return sb
             return None
         except (CollectionDoesNotExist):
             # fall if cannot access the parent dir
@@ -177,14 +177,14 @@ class irods_client(object):
         stats = self._ensureDirEntryStatLoaded(path)
         entries = []
         if stats:
-            for stat in stats:
-                entries.append(stat.name)
+            for sb in stats:
+                entries.append(sb.name)
         return entries
 
     def is_dir(self, path):
-        stat = self.stat(path)
-        if stat:
-            return stat.directory
+        sb = self.stat(path)
+        if sb:
+            return sb.directory
         return False
 
     def make_dirs(self, path):
@@ -197,8 +197,8 @@ class irods_client(object):
 
     def exists(self, path):
         try:
-            stat = self.stat(path)
-            if stat:
+            sb = self.stat(path)
+            if sb:
                 return True
             return False
         except (CollectionDoesNotExist, DataObjectDoesNotExist):
@@ -219,8 +219,8 @@ class irods_client(object):
 
     def read(self, path, offset, size):
         logger.info(
-            "read : %s, off(%d), size(%d)" %
-            (path, offset, size))
+            "read : %s, off(%d), size(%d)" % (path, offset, size)
+        )
         buf = None
         try:
             logger.info("read: opening a file - %s" % path)

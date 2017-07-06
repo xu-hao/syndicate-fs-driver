@@ -246,9 +246,9 @@ class plugin_impl(abstractfs.afsbase):
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
-                st = self.stat(driver_path)
-                if st:
-                    entry = abstractfs.afsevent(driver_path, st)
+                sb = self.stat(driver_path)
+                if sb:
+                    entry = abstractfs.afsevent(driver_path, sb)
                     if operation == "create":
                         self.notification_cb([], [entry], [])
                     elif operation == "modify":

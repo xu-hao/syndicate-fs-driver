@@ -17,18 +17,18 @@
 """
 
 """
-General iRODS Plugin
+FTP Plugin
 """
 import os
 import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.plugins.irods.irods_client as irods_client
+import sgfsdriver.plugins.ftp.ftp_client as ftp_client
 
-logger = logging.getLogger('syndicate_iRODS_filesystem')
+logger = logging.getLogger('syndicate_ftp_filesystem')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-fh = logging.FileHandler('syndicate_iRODS_filesystem.log')
+fh = logging.FileHandler('syndicate_ftp_filesystem.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
 formatter = logging.Formatter(
@@ -38,15 +38,15 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 
-def reconnectAtIRODSFail(func):
+def reconnectAtFTPFail(func):
     def wrap(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
         except Exception as e:
             logger.info("failed to process an operation : " + str(e))
-            if self.irods:
-                logger.info("reconnect: trying to reconnect to iRODS")
-                self.irods.reconnect()
+            if self.ftp:
+                logger.info("reconnect: trying to reconnect to FTP server")
+                self.ftp.reconnect()
                 logger.info("calling the operation again")
                 return func(self, *args, **kwargs)
 
@@ -78,9 +78,9 @@ class plugin_impl(abstractfs.afsbase):
         if not password:
             raise ValueError("password is not given correctly")
 
-        irods_config = config.get("irods")
-        if not irods_config:
-            raise ValueError("irods configuration is not given correctly")
+        ftp_config = config.get("ftp")
+        if not ftp_config:
+            raise ValueError("FTP configuration is not given correctly")
 
         # set role
         self._role = role
@@ -89,22 +89,18 @@ class plugin_impl(abstractfs.afsbase):
         work_root = work_root.encode('ascii', 'ignore')
         self.work_root = work_root.rstrip("/")
 
-        self.irods_config = irods_config
+        self.ftp_config = ftp_config
 
-        # init irods client
+        # init ftp client
         # we convert unicode (maybe) strings to ascii
-        # since python-irodsclient cannot accept unicode strings
-        irods_host = self.irods_config["host"]
-        irods_host = irods_host.encode('ascii', 'ignore')
-        irods_zone = self.irods_config["zone"]
-        irods_zone = irods_zone.encode('ascii', 'ignore')
+        ftp_host = self.ftp_config["host"]
+        ftp_host = ftp_host.encode('ascii', 'ignore')
 
-        logger.info("__init__: initializing irods_client")
-        self.irods = irods_client.irods_client(host=irods_host,
-                                               port=self.irods_config["port"],
-                                               user=user,
-                                               password=password,
-                                               zone=irods_zone)
+        logger.info("__init__: initializing ftp_client")
+        self.ftp = ftp_client.ftp_client(host=ftp_host,
+                                         port=self.ftp_config["port"],
+                                         user=user,
+                                         password=password)
 
         self.notification_cb = None
         # create a re-entrant lock (not a read lock)
@@ -132,15 +128,15 @@ class plugin_impl(abstractfs.afsbase):
                 self.notification_cb([], [], [entry])
         elif operation in ["create", "modify"]:
             if self.notification_cb:
-                sb = self.stat(driver_path)
-                if sb:
-                    entry = abstractfs.afsevent(driver_path, sb)
+                st = self.stat(driver_path)
+                if st:
+                    entry = abstractfs.afsevent(driver_path, st)
                     if operation == "create":
                         self.notification_cb([], [entry], [])
                     elif operation == "modify":
                         self.notification_cb([entry], [], [])
 
-    def _make_irods_path(self, path):
+    def _make_ftp_path(self, path):
         if path.startswith(self.work_root):
             return path.rstrip("/")
 
@@ -155,30 +151,30 @@ class plugin_impl(abstractfs.afsbase):
         return path.rstrip("/")
 
     def connect(self):
-        logger.info("connect: connecting to iRODS")
+        logger.info("connect: connecting to FTP server")
 
-        self.irods.connect()
+        self.ftp.connect()
 
         if self._role == abstractfs.afsrole.DISCOVER:
-            if not self.irods.exists(self.work_root):
+            if not self.ftp.exists(self.work_root):
                 raise IOError("work_root does not exist")
 
     def close(self):
         logger.info("close")
-        logger.info("close: closing iRODS")
-        if self.irods:
-            self.irods.close()
+        logger.info("close: closing FTP connection")
+        if self.ftp:
+            self.ftp.close()
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def stat(self, path):
         logger.info("stat - %s" % path)
 
         with self._get_lock():
             ascii_path = path.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
+            ftp_path = self._make_ftp_path(ascii_path)
             driver_path = self._make_driver_path(ascii_path)
             # get stat
-            sb = self.irods.stat(irods_path)
+            sb = self.ftp.stat(ftp_path)
             if sb:
                 return abstractfs.afsstat(directory=sb.directory,
                                           path=driver_path,
@@ -190,132 +186,105 @@ class plugin_impl(abstractfs.afsbase):
             else:
                 return None
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def exists(self, path):
         logger.info("exists - %s" % path)
 
         with self._get_lock():
             ascii_path = path.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            exist = self.irods.exists(irods_path)
+            ftp_path = self._make_ftp_path(ascii_path)
+            exist = self.ftp.exists(ftp_path)
             return exist
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def list_dir(self, dirpath):
         logger.info("list_dir - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            l = self.irods.list_dir(irods_path)
+            ftp_path = self._make_ftp_path(ascii_path)
+            l = self.ftp.list_dir(ftp_path)
             return l
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def is_dir(self, dirpath):
         logger.info("is_dir - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            d = self.irods.is_dir(irods_path)
+            ftp_path = self._make_ftp_path(ascii_path)
+            d = self.ftp.is_dir(ftp_path)
             return d
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def make_dirs(self, dirpath):
         logger.info("make_dirs - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            if not self.exists(irods_path):
-                self.irods.make_dirs(irods_path)
+            ftp_path = self._make_ftp_path(ascii_path)
+            if not self.exists(ftp_path):
+                self.ftp.make_dirs(ftp_path)
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def read(self, filepath, offset, size):
         logger.info("read - %s, %d, %d" % (filepath, offset, size))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            buf = self.irods.read(irods_path, offset, size)
+            ftp_path = self._make_ftp_path(ascii_path)
+            buf = self.ftp.read(ftp_path, offset, size)
             return buf
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def write(self, filepath, offset, buf):
         logger.info("write - %s, %d, %d" % (filepath, offset, len(buf)))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            self.irods.write(irods_path, offset, buf)
+            ftp_path = self._make_ftp_path(ascii_path)
+            self.ftp.write(ftp_path, offset, buf)
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def truncate(self, filepath, size):
         logger.info("truncate - %s, %d" % (filepath, size))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            self.irods.truncate(irods_path, size)
+            ftp_path = self._make_ftp_path(ascii_path)
+            self.ftp.truncate(ftp_path, size)
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def clear_cache(self, path):
         logger.info("clear_cache - %s" % path)
 
         with self._get_lock():
             if path:
                 ascii_path = path.encode('ascii', 'ignore')
-                irods_path = self._make_irods_path(ascii_path)
-                self.irods.clear_stat_cache(irods_path)
+                ftp_path = self._make_ftp_path(ascii_path)
+                self.ftp.clear_stat_cache(ftp_path)
             else:
-                self.irods.clear_stat_cache(None)
+                self.ftp.clear_stat_cache(None)
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def unlink(self, filepath):
         logger.info("unlink - %s" % filepath)
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            self.irods.unlink(irods_path)
+            ftp_path = self._make_ftp_path(ascii_path)
+            self.ftp.unlink(ftp_path)
 
-    @reconnectAtIRODSFail
+    @reconnectAtFTPFail
     def rename(self, filepath1, filepath2):
         logger.info("rename - %s to %s" % (filepath1, filepath2))
 
         with self._get_lock():
             ascii_path1 = filepath1.encode('ascii', 'ignore')
             ascii_path2 = filepath2.encode('ascii', 'ignore')
-            irods_path1 = self._make_irods_path(ascii_path1)
-            irods_path2 = self._make_irods_path(ascii_path2)
-            self.irods.rename(irods_path1, irods_path2)
-
-    @reconnectAtIRODSFail
-    def set_xattr(self, filepath, key, value):
-        logger.info("set_xattr - %s, %s=%s" % (filepath, key, value))
-
-        with self._get_lock():
-            ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            self.irods.set_xattr(irods_path, key, value)
-
-    @reconnectAtIRODSFail
-    def get_xattr(self, filepath, key):
-        logger.info("get_xattr - %s, %s" % (filepath, key))
-
-        with self._get_lock():
-            ascii_path = filepath.encode('ascii', 'ignore')
-            irods_path = self._make_irods_path(ascii_path)
-            return self.irods.get_xattr(irods_path, key)
-
-    @reconnectAtIRODSFail
-    def list_xattr(self, filepath):
-        logger.info("list_xattr - %s" % filepath)
-
-        with self._get_lock():
-            ascii_path = filepath.encode('ascii', 'ignore')
-            localfs_path = self._make_irods_path(ascii_path)
-            return self.irods.list_xattr(localfs_path)
+            ftp_path1 = self._make_ftp_path(ascii_path1)
+            ftp_path2 = self._make_ftp_path(ascii_path2)
+            self.ftp.rename(ftp_path1, ftp_path2)
 
     def plugin(self):
         return self.__class__
