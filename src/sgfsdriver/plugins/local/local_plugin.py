@@ -28,6 +28,7 @@ import pyinotify
 
 
 import sgfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.lib.afsgateway as afsgateway
 
 logger = logging.getLogger('syndicate_local_filesystem')
 logger.setLevel(logging.DEBUG)
@@ -324,3 +325,6 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("set_notification_cb")
 
         self.notification_cb = notification_cb
+
+    def get_supported_gateways(self):
+        return [afsgateway.GW_AG, afsgateway.GW_RG]

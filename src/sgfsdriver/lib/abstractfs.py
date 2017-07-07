@@ -93,6 +93,11 @@ class afsrole(object):
     WRITE = 3
 
 
+class afsgateway(object):
+    GW_AG = 1
+    GW_RG = 2
+
+
 class afsbase(object):
     __metaclass__ = ABCMeta
 
@@ -180,6 +185,12 @@ class afsbase(object):
     def role(self):
         pass
 
+    # set a notification callback
     @abstractmethod
     def set_notification_cb(self, notification_cb):
+        pass
+
+    # check what gateways are suported with this plugin
+    @abstractmethod
+    def get_supported_gateways(self):
         pass

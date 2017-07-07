@@ -182,9 +182,9 @@ class irods_client(object):
         return entries
 
     def is_dir(self, path):
-        stat = self.stat(path)
-        if stat:
-            return stat.directory
+        sb = self.stat(path)
+        if sb:
+            return sb.directory
         return False
 
     def make_dirs(self, path):
@@ -219,8 +219,8 @@ class irods_client(object):
 
     def read(self, path, offset, size):
         logger.info(
-            "read : %s, off(%d), size(%d)" %
-            (path, offset, size))
+            "read : %s, off(%d), size(%d)" % (path, offset, size)
+        )
         buf = None
         try:
             logger.info("read: opening a file - %s" % path)

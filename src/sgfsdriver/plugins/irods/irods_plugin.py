@@ -23,6 +23,7 @@ import os
 import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.lib.afsgateway as afsgateway
 import sgfsdriver.plugins.irods.irods_client as irods_client
 
 logger = logging.getLogger('syndicate_iRODS_filesystem')
@@ -327,3 +328,6 @@ class plugin_impl(abstractfs.afsbase):
         logger.info("set_notification_cb")
 
         self.notification_cb = notification_cb
+
+    def get_supported_gateways(self):
+        return [afsgateway.GW_AG, afsgateway.GW_RG]
