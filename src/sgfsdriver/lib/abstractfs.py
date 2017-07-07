@@ -94,8 +94,13 @@ class afsrole(object):
 
 
 class afsgateway(object):
-    GW_AG = 1
-    GW_RG = 2
+    AG = "AG"
+    RG = "RG"
+
+
+class afsreplicationmode(object):
+    BLOCK = "BLOCK"
+    FILE = "FILE"
 
 
 class afsbase(object):
@@ -193,4 +198,8 @@ class afsbase(object):
     # check what gateways are suported with this plugin
     @abstractmethod
     def get_supported_gateways(self):
+        pass
+
+    @abstractmethod
+    def get_supported_replication_mode(self):
         pass

@@ -24,6 +24,7 @@ import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
 import sgfsdriver.lib.afsgateway as afsgateway
+import sgfsdriver.lib.afsreplicationmode as afsreplicationmode
 import sgfsdriver.plugins.ftp.ftp_client as ftp_client
 
 logger = logging.getLogger('syndicate_ftp_filesystem')
@@ -299,4 +300,7 @@ class plugin_impl(abstractfs.afsbase):
         self.notification_cb = notification_cb
 
     def get_supported_gateways(self):
-        return [afsgateway.GW_AG]
+        return [afsgateway.AG, afsgateway.RG]
+
+    def get_supported_replication_mode(self):
+        return [afsreplicationmode.BLOCK]

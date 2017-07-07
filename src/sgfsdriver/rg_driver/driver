@@ -28,6 +28,8 @@ import threading
 import json
 import syndicate.util.gateway as gateway
 import sgfsdriver.lib.abstractfs as abstractfs
+import sgfsdriver.lib.afsgateway as afsgateway
+import sgfsdriver.lib.afsreplicationmode as afsreplicationmode
 import sgfsdriver.lib.replication as replication
 
 from sgfsdriver.lib.pluginloader import pluginloader
@@ -93,6 +95,25 @@ def _initFS(driver_config, driver_secrets, role):
 
         if not fs:
             gateway.log_error("No such driver plugin found: %s" % plugin)
+            return False
+
+        if afsgateway.RG not in fs.get_supported_gateways():
+            gateway.log_error(
+                "The plugin does not support RG: %r" %
+                fs.get_supported_gateways()
+            )
+            return False
+
+        if block_replication:
+            repl_mode = afsreplicationmode.BLOCK
+        else:
+            repl_mode = afsreplicationmode.FILE
+
+        if repl_mode not in fs.get_supported_replication_mode():
+            gateway.log_error(
+                "The plugin does not support Replication Mode: %r" %
+                fs.get_supported_replication_mode()
+            )
             return False
 
         fs.connect()

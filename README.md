@@ -15,6 +15,7 @@ Supported plugins
 =================
 
 Following plugins are supported currently:
-- iPlant Datastore (datastore)
-- iRODS (irods)
-- local (linux local filesystem)
+- datastore - Cyverse Datastore
+- irods - iRODS
+- local - Linux Local Filesystem
+- ftp - FTP server
