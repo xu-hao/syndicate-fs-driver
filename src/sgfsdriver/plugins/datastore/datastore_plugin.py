@@ -24,8 +24,6 @@ import logging
 import json
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.lib.afsgateway as afsgateway
-import sgfsdriver.lib.afsreplicationmode as afsreplicationmode
 import sgfsdriver.plugins.datastore.bms_client as bms_client
 import sgfsdriver.plugins.datastore.irods_client as irods_client
 
@@ -458,10 +456,10 @@ class plugin_impl(abstractfs.afsbase):
         self.notification_cb = notification_cb
 
     def get_supported_gateways(self):
-        return [afsgateway.AG, afsgateway.RG]
+        return [abstractfs.afsgateway.AG, abstractfs.afsgateway.RG]
 
     def get_supported_replication_mode(self):
         return [
-            afsreplicationmode.BLOCK,
-            afsreplicationmode.FILE
+            abstractfs.afsreplicationmode.BLOCK,
+            abstractfs.afsreplicationmode.FILE
         ]

@@ -28,8 +28,6 @@ import pyinotify
 
 
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.lib.afsgateway as afsgateway
-import sgfsdriver.lib.afsreplicationmode as afsreplicationmode
 
 logger = logging.getLogger('syndicate_local_filesystem')
 logger.setLevel(logging.DEBUG)
@@ -328,10 +326,10 @@ class plugin_impl(abstractfs.afsbase):
         self.notification_cb = notification_cb
 
     def get_supported_gateways(self):
-        return [afsgateway.AG, afsgateway.RG]
+        return [abstractfs.afsgateway.AG, abstractfs.afsgateway.RG]
 
     def get_supported_replication_mode(self):
         return [
-            afsreplicationmode.BLOCK,
-            afsreplicationmode.FILE
+            abstractfs.afsreplicationmode.BLOCK,
+            abstractfs.afsreplicationmode.FILE
         ]

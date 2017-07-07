@@ -29,7 +29,6 @@ import Queue
 import json
 import syndicate.util.gateway as gateway
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.lib.afsgateway as afsgateway
 
 from sgfsdriver.lib.pluginloader import pluginloader
 
@@ -97,7 +96,7 @@ def _initFS(driver_config, driver_secrets, role):
             gateway.log_error("No such driver plugin found: %s" % plugin)
             return False
 
-        if afsgateway.AG not in fs.get_supported_gateways():
+        if abstractfs.afsgateway.AG not in fs.get_supported_gateways():
             gateway.log_error(
                 "The plugin does not support AG: %s" %
                 fs.get_supported_gateways()
