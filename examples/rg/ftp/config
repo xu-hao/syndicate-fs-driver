@@ -1,0 +1,15 @@
+{
+   "STORAGE_DIR":       "/syndicate-RG-dataset",
+   "BLOCK_REPLICATION": true,
+   "EXEC_FMT":          "/usr/bin/env python -m syndicate.rg.gateway",
+   "DRIVER":            "syndicate.rg.drivers.fs",
+   "DRIVER_FS_PLUGIN":  "ftp",
+   "DRIVER_FS_PLUGIN_CONFIG": 
+      {
+         "ftp":
+            {
+               "host":  "xxx.com",
+               "port":  1247
+            }
+      }                     
+}

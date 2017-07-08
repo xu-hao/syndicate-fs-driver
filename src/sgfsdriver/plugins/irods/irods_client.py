@@ -99,7 +99,10 @@ class irods_client(object):
                  password=None,
                  zone=None):
         self.host = host
-        self.port = port
+        if port:
+            self.port = port
+        else:
+            self.port = 1247
         self.user = user
         self.password = password
         self.zone = zone

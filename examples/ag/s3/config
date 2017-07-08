@@ -1,0 +1,13 @@
+{
+   "DATASET_DIR":       "/",
+   "EXEC_FMT":          "/usr/bin/env python -m syndicate.ag.gateway",
+   "DRIVER":            "syndicate.ag.drivers.fs",
+   "DRIVER_FS_PLUGIN":  "s3",
+   "DRIVER_FS_PLUGIN_CONFIG":
+      {
+         "s3":
+            {
+               "bucket":  "sd_s3_testbucket"
+            }
+      }
+}

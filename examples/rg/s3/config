@@ -1,0 +1,14 @@
+{
+   "STORAGE_DIR":       "/",
+   "BLOCK_REPLICATION": true,
+   "EXEC_FMT":          "/usr/bin/env python -m syndicate.rg.gateway",
+   "DRIVER":            "syndicate.rg.drivers.fs",
+   "DRIVER_FS_PLUGIN":  "s3",
+   "DRIVER_FS_PLUGIN_CONFIG": 
+      {
+         "s3":
+            {
+               "bucket":  "sd_s3_testbucket"
+            }
+      }                     
+}

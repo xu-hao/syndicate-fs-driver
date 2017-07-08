@@ -75,9 +75,21 @@ class ftp_client(object):
                  user='anonymous',
                  password='anonymous@email.com'):
         self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
+        if port:
+            self.port = port
+        else:
+            self.port = 21
+
+        if user:
+            self.user = user
+        else:
+            self.user = "anonymous"
+
+        if password:
+            self.password = password
+        else:
+            self.password = "anonymous@email.com"
+
         self.session = None
 
     def connect(self):
@@ -145,7 +157,7 @@ class ftp_client(object):
 
     def make_dirs(self, path):
         self.session.makedirs(path)
-        self.session.stat_cache.invalidate(path)
+        self.clear_stat_cache(os.path.dirname(path))
 
     def exists(self, path):
         try:

@@ -124,8 +124,16 @@ class bms_client(object):
                  auto_reregistration=True,
                  acceptors=None):
         self.host = host
-        self.port = port
-        self.vhost = vhost
+        if port:
+            self.port = port
+        else:
+            self.port = 31333
+
+        if vhost:
+            self.vhost = vhost
+        else:
+            self.vhost = "/"
+
         self.user = user
         self.password = password
         if appid:

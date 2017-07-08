@@ -135,7 +135,10 @@ class plugin_impl(abstractfs.afsbase):
 
     def _make_localfs_path(self, path):
         if path.startswith(self.work_root):
-            return path.rstrip("/")
+            if path == "/":
+                return path
+            else:
+                return path.rstrip("/")
 
         if path.startswith("/"):
             return self.work_root + path.rstrip("/")

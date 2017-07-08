@@ -17,18 +17,18 @@
 """
 
 """
-FTP Plugin
+S3 Plugin
 """
 import os
 import logging
 import threading
 import sgfsdriver.lib.abstractfs as abstractfs
-import sgfsdriver.plugins.ftp.ftp_client as ftp_client
+import sgfsdriver.plugins.s3.s3_client as s3_client
 
-logger = logging.getLogger('syndicate_ftp_filesystem')
+logger = logging.getLogger('syndicate_s3_filesystem')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-fh = logging.FileHandler('syndicate_ftp_filesystem.log')
+fh = logging.FileHandler('syndicate_s3_filesystem.log')
 fh.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
 formatter = logging.Formatter(
@@ -38,15 +38,15 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 
-def reconnectAtFTPFail(func):
+def reconnectAtS3Fail(func):
     def wrap(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
         except Exception as e:
             logger.info("failed to process an operation : " + str(e))
-            if self.ftp:
-                logger.info("reconnect: trying to reconnect to FTP server")
-                self.ftp.reconnect()
+            if self.s3:
+                logger.info("reconnect: trying to reconnect to S3 server")
+                self.s3.reconnect()
                 logger.info("calling the operation again")
                 return func(self, *args, **kwargs)
 
@@ -68,19 +68,19 @@ class plugin_impl(abstractfs.afsbase):
         if not secrets:
             raise ValueError("secrets are not given correctly")
 
-        user = secrets.get("user")
-        user = user.encode('ascii', 'ignore')
-        if not user:
-            raise ValueError("user is not given correctly")
+        aws_access_key_id = secrets.get("aws_access_key_id")
+        aws_access_key_id = aws_access_key_id.encode('ascii', 'ignore')
+        if not aws_access_key_id:
+            raise ValueError("aws_access_key_id is not given correctly")
 
-        password = secrets.get("password")
-        password = password.encode('ascii', 'ignore')
-        if not password:
-            raise ValueError("password is not given correctly")
+        aws_secret_access_key = secrets.get("aws_secret_access_key")
+        aws_secret_access_key = aws_secret_access_key.encode('ascii', 'ignore')
+        if not aws_secret_access_key:
+            raise ValueError("aws_secret_access_key is not given correctly")
 
-        ftp_config = config.get("ftp")
-        if not ftp_config:
-            raise ValueError("FTP configuration is not given correctly")
+        s3_config = config.get("s3")
+        if not s3_config:
+            raise ValueError("S3 configuration is not given correctly")
 
         # set role
         self._role = role
@@ -89,18 +89,23 @@ class plugin_impl(abstractfs.afsbase):
         work_root = work_root.encode('ascii', 'ignore')
         self.work_root = work_root.rstrip("/")
 
-        self.ftp_config = ftp_config
+        self.s3_config = s3_config
 
-        # init ftp client
+        # init s3 client
         # we convert unicode (maybe) strings to ascii
-        ftp_host = self.ftp_config["host"]
-        ftp_host = ftp_host.encode('ascii', 'ignore')
+        s3_bucket = self.s3_config["bucket"]
+        s3_bucket = s3_bucket.encode('ascii', 'ignore')
 
-        logger.info("__init__: initializing ftp_client")
-        self.ftp = ftp_client.ftp_client(host=ftp_host,
-                                         port=self.ftp_config["port"],
-                                         user=user,
-                                         password=password)
+        s3_region = self.s3_config["region"]
+        s3_region = s3_region.encode('ascii', 'ignore')
+
+        logger.info("__init__: initializing s3_client")
+        self.s3 = s3_client.s3_client(
+            bucket=s3_bucket,
+            access_id=aws_access_key_id,
+            access_key=aws_secret_access_key,
+            s3_region=s3_region
+        )
 
         self.notification_cb = None
         # create a re-entrant lock (not a read lock)
@@ -136,17 +141,14 @@ class plugin_impl(abstractfs.afsbase):
                     elif operation == "modify":
                         self.notification_cb([entry], [], [])
 
-    def _make_ftp_path(self, path):
+    def _make_s3_path(self, path):
         if path.startswith(self.work_root):
-            if path == "/":
-                return path
-            else:
-                return path.rstrip("/")
+            return path.rstrip("/")
 
         if path.startswith("/"):
-            return self.work_root + path.rstrip("/")
+            return self.work_root.rstrip("/") + path.rstrip("/")
 
-        return self.work_root + "/" + path.rstrip("/")
+        return self.work_root.rstrip("/") + "/" + path.rstrip("/")
 
     def _make_driver_path(self, path):
         if path.startswith(self.work_root):
@@ -154,30 +156,30 @@ class plugin_impl(abstractfs.afsbase):
         return path.rstrip("/")
 
     def connect(self):
-        logger.info("connect: connecting to FTP server")
+        logger.info("connect: connecting to S3 server")
 
-        self.ftp.connect()
+        self.s3.connect()
 
         if self._role == abstractfs.afsrole.DISCOVER:
-            if not self.ftp.exists(self.work_root):
+            if not self.s3.exists(self.work_root):
                 raise IOError("work_root does not exist")
 
     def close(self):
         logger.info("close")
-        logger.info("close: closing FTP connection")
-        if self.ftp:
-            self.ftp.close()
+        logger.info("close: closing S3 connection")
+        if self.s3:
+            self.s3.close()
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def stat(self, path):
         logger.info("stat - %s" % path)
 
         with self._get_lock():
             ascii_path = path.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
+            s3_path = self._make_s3_path(ascii_path)
             driver_path = self._make_driver_path(ascii_path)
             # get stat
-            sb = self.ftp.stat(ftp_path)
+            sb = self.s3.stat(s3_path)
             if sb:
                 return abstractfs.afsstat(directory=sb.directory,
                                           path=driver_path,
@@ -189,105 +191,105 @@ class plugin_impl(abstractfs.afsbase):
             else:
                 return None
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def exists(self, path):
         logger.info("exists - %s" % path)
 
         with self._get_lock():
             ascii_path = path.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            exist = self.ftp.exists(ftp_path)
+            s3_path = self._make_s3_path(ascii_path)
+            exist = self.s3.exists(s3_path)
             return exist
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def list_dir(self, dirpath):
         logger.info("list_dir - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            l = self.ftp.list_dir(ftp_path)
+            s3_path = self._make_s3_path(ascii_path)
+            l = self.s3.list_dir(s3_path)
             return l
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def is_dir(self, dirpath):
         logger.info("is_dir - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            d = self.ftp.is_dir(ftp_path)
+            s3_path = self._make_s3_path(ascii_path)
+            d = self.s3.is_dir(s3_path)
             return d
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def make_dirs(self, dirpath):
         logger.info("make_dirs - %s" % dirpath)
 
         with self._get_lock():
             ascii_path = dirpath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            if not self.exists(ftp_path):
-                self.ftp.make_dirs(ftp_path)
+            s3_path = self._make_s3_path(ascii_path)
+            if not self.exists(s3_path):
+                self.s3.make_dirs(s3_path)
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def read(self, filepath, offset, size):
         logger.info("read - %s, %d, %d" % (filepath, offset, size))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            buf = self.ftp.read(ftp_path, offset, size)
+            s3_path = self._make_s3_path(ascii_path)
+            buf = self.s3.read(s3_path, offset, size)
             return buf
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def write(self, filepath, offset, buf):
         logger.info("write - %s, %d, %d" % (filepath, offset, len(buf)))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            self.ftp.write(ftp_path, offset, buf)
+            s3_path = self._make_s3_path(ascii_path)
+            self.s3.write(s3_path, offset, buf)
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def truncate(self, filepath, size):
         logger.info("truncate - %s, %d" % (filepath, size))
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            self.ftp.truncate(ftp_path, size)
+            s3_path = self._make_s3_path(ascii_path)
+            self.s3.truncate(s3_path, size)
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def clear_cache(self, path):
         logger.info("clear_cache - %s" % path)
 
         with self._get_lock():
             if path:
                 ascii_path = path.encode('ascii', 'ignore')
-                ftp_path = self._make_ftp_path(ascii_path)
-                self.ftp.clear_stat_cache(ftp_path)
+                s3_path = self._make_s3_path(ascii_path)
+                self.s3.clear_stat_cache(s3_path)
             else:
-                self.ftp.clear_stat_cache(None)
+                self.s3.clear_stat_cache(None)
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def unlink(self, filepath):
         logger.info("unlink - %s" % filepath)
 
         with self._get_lock():
             ascii_path = filepath.encode('ascii', 'ignore')
-            ftp_path = self._make_ftp_path(ascii_path)
-            self.ftp.unlink(ftp_path)
+            s3_path = self._make_s3_path(ascii_path)
+            self.s3.unlink(s3_path)
 
-    @reconnectAtFTPFail
+    @reconnectAtS3Fail
     def rename(self, filepath1, filepath2):
         logger.info("rename - %s to %s" % (filepath1, filepath2))
 
         with self._get_lock():
             ascii_path1 = filepath1.encode('ascii', 'ignore')
             ascii_path2 = filepath2.encode('ascii', 'ignore')
-            ftp_path1 = self._make_ftp_path(ascii_path1)
-            ftp_path2 = self._make_ftp_path(ascii_path2)
-            self.ftp.rename(ftp_path1, ftp_path2)
+            s3_path1 = self._make_s3_path(ascii_path1)
+            s3_path2 = self._make_s3_path(ascii_path2)
+            self.s3.rename(s3_path1, s3_path2)
 
     def plugin(self):
         return self.__class__
