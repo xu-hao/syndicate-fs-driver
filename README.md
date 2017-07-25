@@ -19,3 +19,4 @@ Following plugins are supported currently:
 - irods - iRODS
 - local - Linux Local Filesystem
 - ftp - FTP server
+- s3 - Amazon S3

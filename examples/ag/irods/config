@@ -1,5 +1,7 @@
 {
    "DATASET_DIR":       "/iplant/home/iychoi/syndicate-AG-dataset",
+   "MS_TTL": 300000,
+   "AG_TTL": 300000,
    "EXEC_FMT":          "/usr/bin/env python -m syndicate.ag.gateway",
    "DRIVER":            "syndicate.ag.drivers.fs",
    "DRIVER_FS_PLUGIN":  "irods",

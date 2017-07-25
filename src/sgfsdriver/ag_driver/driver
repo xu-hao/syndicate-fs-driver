@@ -32,24 +32,23 @@ import sgfsdriver.lib.abstractfs as abstractfs
 
 from sgfsdriver.lib.pluginloader import pluginloader
 
-storage_dir = None
-sync_fully = False
+DEFAULT_READ_TTL = 1000 * 60 * 5     # 5min
+DEFAULT_WRITE_TTL = 1000 * 60 * 5     # 5min
+
 fs = None
+storage_dir = None
+read_ttl = DEFAULT_READ_TTL
+write_ttl = DEFAULT_WRITE_TTL
 
 # will store commands to be processed
 command_queue = Queue.Queue(0)
-
-DEFAULT_SCAN_FILE_TTL = 1000 * 60 * 5   # 5mins
-DEFAULT_SCAN_DIRECTORY_TTL = 1000       # expire very soon
-DEFAULT_REFRESH_FILE_TTL = 1000 * 60 * 5    # 5mins
-DEFAULT_REFRESH_DIRECTORY_TTL = 1000 * 60 * 5   # 5 mins
-DEFAULT_READ_TTL = 1000 * 60 * 5     # 5min
 
 
 def _initFS(driver_config, driver_secrets, role):
     global fs
     global storage_dir
-    global sync_fully
+    global read_ttl
+    global write_ttl
 
     gateway.log_debug("_initFS")
 
@@ -72,10 +71,11 @@ def _initFS(driver_config, driver_secrets, role):
     storage_dir = driver_config['DATASET_DIR']
     storage_dir = "/" + storage_dir.strip("/")
 
-    if "DATASET_SYNC_FULLY" in driver_config:
-        sync_fully = driver_config["DATASET_SYNC_FULLY"]
-    else:
-        sync_fully = True
+    if "MS_TTL" in driver_config:
+        read_ttl = int(driver_config["MS_TTL"])
+
+    if "AG_TTL" in driver_config:
+        write_ttl = int(driver_config["AG_TTL"])
 
     plugin = driver_config["DRIVER_FS_PLUGIN"]
 
@@ -140,8 +140,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
                 0755,
                 u.stat.size,
                 u.path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_FILE_TTL
+                read_ttl=read_ttl,
+                write_ttl=write_ttl
             )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
@@ -153,8 +153,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
                 0755,
                 None,
                 u.path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL
+                read_ttl=read_ttl,
+                write_ttl=write_ttl
             )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
@@ -168,8 +168,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
                 0755,
                 a.stat.size,
                 a.path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_FILE_TTL
+                read_ttl=read_ttl,
+                write_ttl=write_ttl
             )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
@@ -181,8 +181,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
                 0755,
                 None,
                 a.path,
-                read_ttl=DEFAULT_READ_TTL,
-                write_ttl=DEFAULT_SCAN_DIRECTORY_TTL
+                read_ttl=read_ttl,
+                write_ttl=write_ttl
             )
             gateway.log_debug("Queuing a command %s" % cmd['path'])
             command_queue.put((cmd, None))
@@ -210,9 +210,8 @@ def _resync(path):
                     e = abstractfs.afsevent(entry_path, st)
 
                     if st.directory:
-                        if sync_fully:
-                            # do sync recursively
-                            stack.append(entry_path)
+                        # do sync recursively
+                        stack.append(entry_path)
 
                     datasets_update_cb([], [e], [])
 
@@ -337,8 +336,8 @@ def refresh(request, driver_config, driver_secrets):
                     0755,
                     stat.size,
                     file_path,
-                    read_ttl=DEFAULT_READ_TTL,
-                    write_ttl=DEFAULT_REFRESH_FILE_TTL
+                    read_ttl=read_ttl,
+                    write_ttl=write_ttl
                 )
                 gateway.log_debug("Queuing a command %s" % cmd['path'])
                 command_queue.put((cmd, sem))
@@ -350,8 +349,8 @@ def refresh(request, driver_config, driver_secrets):
                     0755,
                     None,
                     file_path,
-                    read_ttl=DEFAULT_READ_TTL,
-                    write_ttl=DEFAULT_REFRESH_DIRECTORY_TTL
+                    read_ttl=read_ttl,
+                    write_ttl=write_ttl
                 )
                 gateway.log_debug("Queuing a command %s" % cmd['path'])
                 command_queue.put((cmd, sem))
