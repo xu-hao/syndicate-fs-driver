@@ -1,7 +1,9 @@
 {
    "DATASET_DIR":       "/tmp/syndicate-AG-dataset",
-   "MS_TTL": 300000,
-   "AG_TTL": 300000,
+   "MS_TTL": 300,
+   "AG_TTL": 300,
+   "DATA_CACHE_SIZE": 300,
+   "DATA_CACHE_TTL": 300,
    "EXEC_FMT":          "/usr/bin/env python -m syndicate.ag.gateway",
    "DRIVER":            "syndicate.ag.drivers.fs",
    "DRIVER_FS_PLUGIN":  "local",

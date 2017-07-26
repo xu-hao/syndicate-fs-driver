@@ -31,24 +31,34 @@ import syndicate.util.gateway as gateway
 import sgfsdriver.lib.abstractfs as abstractfs
 
 from sgfsdriver.lib.pluginloader import pluginloader
+from expiringdict import ExpiringDict
 
-DEFAULT_READ_TTL = 1000 * 60 * 5     # 5min
-DEFAULT_WRITE_TTL = 1000 * 60 * 5     # 5min
+DEFAULT_READ_TTL = 60 * 5     # 5min
+DEFAULT_WRITE_TTL = 60 * 5     # 5min
+DEFAULT_DATA_CACHE_SIZE = 300      # 300 blocks
+DEFAULT_DATA_CACHE_TTL = 60 * 5     # 5min
 
 fs = None
 storage_dir = None
-read_ttl = DEFAULT_READ_TTL
-write_ttl = DEFAULT_WRITE_TTL
+read_ttl = DEFAULT_READ_TTL * 1000
+write_ttl = DEFAULT_WRITE_TTL * 1000
+data_cache_size = DEFAULT_DATA_CACHE_SIZE
+data_cache_ttl = DEFAULT_DATA_CACHE_TTL
 
 # will store commands to be processed
 command_queue = Queue.Queue(0)
 
+# data cache
+data_cache = None
 
 def _initFS(driver_config, driver_secrets, role):
     global fs
     global storage_dir
     global read_ttl
     global write_ttl
+    global data_cache_size
+    global data_cache_ttl
+    global data_cache
 
     gateway.log_debug("_initFS")
 
@@ -72,10 +82,16 @@ def _initFS(driver_config, driver_secrets, role):
     storage_dir = "/" + storage_dir.strip("/")
 
     if "MS_TTL" in driver_config:
-        read_ttl = int(driver_config["MS_TTL"])
+        read_ttl = int(driver_config["MS_TTL"]) * 1000
 
     if "AG_TTL" in driver_config:
-        write_ttl = int(driver_config["AG_TTL"])
+        write_ttl = int(driver_config["AG_TTL"]) * 1000
+
+    if "DATA_CACHE_SIZE" in driver_config:
+        data_cache_size = int(driver_config["DATA_CACHE_SIZE"])
+
+    if "DATA_CACHE_TTL" in driver_config:
+        data_cache_ttl = int(driver_config["DATA_CACHE_TTL"])
 
     plugin = driver_config["DRIVER_FS_PLUGIN"]
 
@@ -87,6 +103,11 @@ def _initFS(driver_config, driver_secrets, role):
 
     plugin_config["secrets"] = driver_secrets
     plugin_config["work_root"] = storage_dir
+
+    data_cache = ExpiringDict(
+        max_len=data_cache_size,
+        max_age_seconds=data_cache_ttl
+    )
 
     try:
         loader = pluginloader()
@@ -128,12 +149,38 @@ def _shutdownFS():
     fs = None
 
 
+def _get_data_block(file_system, file_path, byte_offset, byte_len):
+    key = "%s|%d|%d" % (file_path, byte_offset, byte_len)
+    if key in data_cache:
+        return data_cache[key]
+
+    try:
+        buf = file_system.read(file_path, byte_offset, byte_len)
+        data_cache[key] = buf
+        return buf
+    except Exception, e:
+        raise IOError("Failed to read %s: %s" % (file_path, e))
+
+
+def _invalidate_data_blocks(file_path):
+    finding_key = "%s|" % (file_path)
+    to_be_deleted_keys = []
+    for key in data_cache:
+        if key.startswith(finding_key):
+            to_be_deleted_keys.append(key)
+
+    for key in to_be_deleted_keys:
+        del data_cache[key]
+
+
 def datasets_update_cb(updated_entries, added_entries, removed_entries):
     gateway.log_debug("datasets_update_cb")
 
     for u in updated_entries:
         if u.stat and not u.stat.directory:
             # file
+            _invalidate_data_blocks(u.path)
+
             cmd = gateway.make_metadata_command(
                 "put",
                 "file",
@@ -162,6 +209,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
     for a in added_entries:
         if a.stat and not a.stat.directory:
             # file
+            _invalidate_data_blocks(a.path)
+
             cmd = gateway.make_metadata_command(
                 "put",
                 "file",
@@ -188,6 +237,8 @@ def datasets_update_cb(updated_entries, added_entries, removed_entries):
             command_queue.put((cmd, None))
 
     for r in removed_entries:
+        _invalidate_data_blocks(r.path)
+
         cmd = gateway.make_metadata_delete_command(r.path)
         gateway.log_debug("Queuing a command %s" % cmd['path'])
         command_queue.put((cmd, None))
@@ -323,6 +374,8 @@ def refresh(request, driver_config, driver_secrets):
         cmd = gateway.make_metadata_delete_command(file_path)
         gateway.log_debug("Queuing a command %s" % cmd['path'])
         command_queue.put((cmd, sem))
+
+        _invalidate_data_blocks(file_path)
     else:
         # update
         gateway.log_debug("Still present: '%s'" % file_path)
@@ -399,8 +452,9 @@ def read(request, chunk_fd, driver_config, driver_secrets):
         gateway.log_error("No such file or directory: %s" % file_path)
         return -errno.ENOENT
 
+    # read
     try:
-        buf = fs.read(file_path, byte_offset, byte_len)
+        buf = _get_data_block(fs, file_path, byte_offset, byte_len)
     except Exception, e:
         gateway.log_error("Failed to read %s: %s" % (file_path, e))
         return -errno.EREMOTEIO
