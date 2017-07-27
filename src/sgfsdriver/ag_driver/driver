@@ -40,6 +40,7 @@ DEFAULT_DATA_CACHE_TTL = 60 * 5     # 5min
 
 fs = None
 storage_dir = None
+sync_on_init = True
 read_ttl = DEFAULT_READ_TTL * 1000
 write_ttl = DEFAULT_WRITE_TTL * 1000
 data_cache_size = DEFAULT_DATA_CACHE_SIZE
@@ -54,6 +55,7 @@ data_cache = None
 def _initFS(driver_config, driver_secrets, role):
     global fs
     global storage_dir
+    global sync_on_init
     global read_ttl
     global write_ttl
     global data_cache_size
@@ -80,6 +82,9 @@ def _initFS(driver_config, driver_secrets, role):
 
     storage_dir = driver_config['DATASET_DIR']
     storage_dir = "/" + storage_dir.strip("/")
+
+    if "SYNC_ON_INIT" in driver_config:
+        sync_on_init = bool(driver_config["SYNC_ON_INIT"])
 
     if "MS_TTL" in driver_config:
         read_ttl = int(driver_config["MS_TTL"]) * 1000
@@ -297,8 +302,9 @@ def driver_init(driver_config, driver_secrets):
         return False
 
     if role == abstractfs.afsrole.DISCOVER:
-        # add initial dataset
-        _resync("/")
+        if sync_on_init:
+            # add initial dataset
+            _resync("/")
 
     return True
 
